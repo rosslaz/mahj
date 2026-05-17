@@ -52,3 +52,86 @@ export function windForGame(
   const idx = (startingPosition + (gameNumber - 1)) % seatCount;
   return seats[idx];
 }
+
+// Group players into tables, balancing sit-out history.
+//
+// A "sit-out" is one game where a player is benched. Only 5-player
+// tables have sit-outs, and only games numbered 1..min(games_planned, 5).
+// (With more than 5 games, the rotation cycles and everyone has sat out
+// at least once.)
+//
+// Two layers of fairness:
+//
+// 1. ACROSS tables. The 5-player tables get filled with players who have
+//    the FEWEST lifetime sit-outs — they're "due" to take their turn.
+//    4-player tables get the rest, shielding them from sitting out tonight.
+//
+// 2. WITHIN a 5-player table. Of the 5 players seated there, only the
+//    first `min(gamesPlanned, 5)` games have sit-outs. Position 4 sits
+//    out game 1, position 3 sits out game 2, etc. So we assign the
+//    lowest-sit-history players to those sit-out positions first.
+//
+// Returns one array per table, in seat-position order (index 0 is wind E,
+// index 1 wind S, …, index 4 the sit-out start position for 5-player
+// tables). The first elements of `tableSizes` should be the 5-player
+// tables (largest first) by convention.
+export function assignPlayersToTables(
+  signupPlayerIds: string[],
+  tableSizes: (4 | 5)[],
+  sitOutCounts: Map<string, number>,
+  gamesPlanned: number
+): string[][] {
+  const total = signupPlayerIds.length;
+  const expected = tableSizes.reduce((a, b) => a + b, 0);
+  if (total !== expected) {
+    throw new Error(`assignPlayersToTables: expected ${expected} players, got ${total}`);
+  }
+
+  // Sort all signups by lifetime sit-outs ascending, random tiebreak.
+  const ranked = [...signupPlayerIds]
+    .map((id) => ({ id, count: sitOutCounts.get(id) ?? 0, tiebreak: Math.random() }))
+    .sort((a, b) => a.count - b.count || a.tiebreak - b.tiebreak);
+
+  // First, group by table. 5-player tables come first per convention,
+  // and get filled with the lowest-sit-history players.
+  const groups: { size: 4 | 5; players: { id: string; count: number; tiebreak: number }[] }[] = [];
+  let cursor = 0;
+  for (const size of tableSizes) {
+    groups.push({ size, players: ranked.slice(cursor, cursor + size) });
+    cursor += size;
+  }
+
+  // Now arrange seat order within each table.
+  return groups.map(({ size, players }) => {
+    if (size === 4) {
+      // No sit-outs — order doesn't affect fairness, shuffle for variety.
+      return shuffle(players.map((p) => p.id));
+    }
+    // 5-player table: of the 5 seats, the LATER positions (3, 4) sit out
+    // FIRST in the rotation. Specifically with windForGame:
+    //   position 4 sits out game 1
+    //   position 3 sits out game 2
+    //   position 2 sits out game 3
+    //   position 1 sits out game 4
+    //   position 0 sits out game 5
+    //
+    // So if gamesPlanned = 2, only positions 4 and 3 ever sit out tonight.
+    // We want the lowest-sit-history players to take those positions.
+    //
+    // Sort players within the table by sit-out count ASCENDING (lowest first).
+    const sortedWithin = [...players].sort(
+      (a, b) => a.count - b.count || a.tiebreak - b.tiebreak
+    );
+    // Build the seat array of length 5. Position N (counting backward from 4)
+    // sits out earlier; we want lowest-sit player at position 4, next-lowest
+    // at position 3, etc.
+    const seats: string[] = new Array(5);
+    for (let i = 0; i < 5; i++) {
+      // i = 0 → seat at position 4 (sits out first), gets sortedWithin[0]
+      // i = 1 → seat at position 3 (sits out second), gets sortedWithin[1]
+      // i = 4 → seat at position 0, gets sortedWithin[4]
+      seats[4 - i] = sortedWithin[i].id;
+    }
+    return seats;
+  });
+}

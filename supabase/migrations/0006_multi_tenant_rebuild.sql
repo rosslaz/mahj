@@ -254,6 +254,8 @@ create index if not exists idx_gpw_league  on game_player_winds(league_id);
 -- 3g. Keep the legacy 'players' table around as a deprecated read-only mirror.
 --     We won't drop it in this migration so we can sanity-check before nuking.
 --     A follow-up migration can `drop table players cascade` once verified.
+--     Disable RLS so verification queries work without policies.
+alter table players disable row level security;
 comment on table players is 'DEPRECATED — replaced by users + league_members. Safe to drop after verification.';
 
 -- ------------------------------------------------------------
@@ -287,7 +289,50 @@ $$;
 grant execute on function current_user_id() to anon, authenticated;
 grant execute on function is_league_member(uuid, text) to anon, authenticated;
 
--- Drop the old v0.4 helpers; they're replaced.
+-- Drop every v0.4 policy that referenced the old helpers, BEFORE dropping
+-- the helpers themselves. Postgres refuses to drop a function that any
+-- policy still depends on.
+drop policy if exists players_select     on players;
+drop policy if exists players_insert     on players;
+drop policy if exists players_update     on players;
+drop policy if exists players_delete     on players;
+
+drop policy if exists game_nights_select on game_nights;
+drop policy if exists game_nights_insert on game_nights;
+drop policy if exists game_nights_update on game_nights;
+drop policy if exists game_nights_delete on game_nights;
+
+drop policy if exists tables_select      on tables;
+drop policy if exists tables_insert      on tables;
+drop policy if exists tables_update      on tables;
+drop policy if exists tables_delete      on tables;
+
+drop policy if exists table_seats_select on table_seats;
+drop policy if exists table_seats_insert on table_seats;
+drop policy if exists table_seats_update on table_seats;
+drop policy if exists table_seats_delete on table_seats;
+
+drop policy if exists games_select       on games;
+drop policy if exists games_insert       on games;
+drop policy if exists games_update       on games;
+drop policy if exists games_delete       on games;
+
+drop policy if exists game_scores_select on game_scores;
+drop policy if exists game_scores_insert on game_scores;
+drop policy if exists game_scores_update on game_scores;
+drop policy if exists game_scores_delete on game_scores;
+
+-- v0.5 tables (might not exist on very old installs — `if exists` handles that)
+drop policy if exists night_signups_select     on night_signups;
+drop policy if exists night_signups_insert     on night_signups;
+drop policy if exists night_signups_update     on night_signups;
+drop policy if exists night_signups_delete     on night_signups;
+drop policy if exists game_player_winds_select on game_player_winds;
+drop policy if exists game_player_winds_insert on game_player_winds;
+drop policy if exists game_player_winds_update on game_player_winds;
+drop policy if exists game_player_winds_delete on game_player_winds;
+
+-- Now safe to drop the old helpers.
 drop function if exists is_admin();
 drop function if exists current_player_id();
 
@@ -328,10 +373,15 @@ drop policy if exists leagues_select on leagues;
 drop policy if exists leagues_insert on leagues;
 drop policy if exists leagues_update on leagues;
 drop policy if exists leagues_delete on leagues;
--- See: public leagues, or leagues you belong to.
+-- See: public leagues, leagues you own, or leagues you belong to.
+-- Owner check exists separately from membership because INSERT ... RETURNING
+-- evaluates the SELECT policy *after* the row is created but *before* the
+-- corresponding league_members row is inserted by the app — so without an
+-- owner escape, the creator can't read the row they just created.
 create policy leagues_select on leagues for select using (
   deleted_at is null and (
     is_public = true
+    or owner_user_id = current_user_id()
     or exists (
       select 1 from league_members
       where league_id = leagues.id and user_id = current_user_id()
@@ -365,11 +415,17 @@ create policy lm_select on league_members for select using (
 create policy lm_insert on league_members for insert with check (
   user_id = current_user_id() or is_league_member(league_id, 'admin')
 );
--- Only owner/admin can change roles; can't change owner role via this path.
+-- Admins (and the owner) can modify any role row in their league,
+-- as long as they don't promote anyone TO owner (that's handled
+-- via the leagues.owner_user_id column and explicit transfer flow).
 create policy lm_update on league_members for update using (
-  is_league_member(league_id, 'admin') and role <> 'owner'
+  is_league_member(league_id, 'admin')
 ) with check (
-  is_league_member(league_id, 'admin') and role <> 'owner'
+  is_league_member(league_id, 'admin')
+  and (
+    role <> 'owner'
+    or user_id = (select owner_user_id from leagues where id = league_id)
+  )
 );
 -- Owner/admin can remove anyone; users can remove themselves.
 create policy lm_delete on league_members for delete using (
@@ -435,7 +491,11 @@ end $$;
 -- 6. Rebuild the leaderboard view scoped to leagues.
 -- ------------------------------------------------------------
 
-create or replace view leaderboard as
+-- The v0.4 view had a different column shape (player_id as first column).
+-- `create or replace view` can't change existing column names/types, so drop first.
+drop view if exists leaderboard;
+
+create view leaderboard as
 select
   lm.league_id,
   u.id as user_id,

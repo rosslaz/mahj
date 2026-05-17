@@ -33,6 +33,7 @@ export default function LeagueSettingsPage() {
   const [transferring, setTransferring] = useState(false);
 
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!lg.league) return;
@@ -136,11 +137,6 @@ export default function LeagueSettingsPage() {
   }
 
   async function deleteLeague() {
-    const confirmation = prompt(`Type the league name to confirm soft-deletion:\n\n${lg.league!.name}`);
-    if (confirmation !== lg.league!.name) {
-      if (confirmation !== null) alert('Name did not match. Deletion cancelled.');
-      return;
-    }
     setDeleting(true);
     const { error: delErr } = await supabase
       .from('leagues')
@@ -239,9 +235,26 @@ export default function LeagueSettingsPage() {
           <p className="text-sm text-ink/60 mb-4">
             Soft-deletes the league. Hidden from everyone, but recoverable with database access. Member history is preserved.
           </p>
-          <button onClick={deleteLeague} disabled={deleting} className="btn" style={{ background: '#9c2c1f', color: '#f5efe6' }}>
-            {deleting ? 'Deleting…' : 'Delete League'}
-          </button>
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} className="btn" style={{ background: '#9c2c1f', color: '#f5efe6' }}>
+              Delete League
+            </button>
+          ) : (
+            <div className="flex gap-3 flex-wrap items-center">
+              <span className="text-sm text-ink/70">Really delete <strong>{lg.league.name}</strong>?</span>
+              <button
+                onClick={deleteLeague}
+                disabled={deleting}
+                className="btn"
+                style={{ background: '#9c2c1f', color: '#f5efe6' }}
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="btn btn-ghost">
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </div>

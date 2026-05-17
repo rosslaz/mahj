@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { useLeague } from '@/lib/use-league';
-import { shuffle, formatTime12, windForGame, WIND_LABEL, type Wind } from '@/lib/game-utils';
+import { shuffle, formatTime12, windForGame, assignPlayersToTables, WIND_LABEL, type Wind } from '@/lib/game-utils';
 import { formatAddressLines } from '@/lib/address';
 
 type Night = {
@@ -213,13 +213,24 @@ export default function GameNightDetailPage() {
       i < fivePlayerTables ? 5 : 4
     );
 
-    const shuffled = shuffle(signups.map((s) => s.player_id));
-    let cursor = 0;
-    const playersByTable: string[][] = tableSizes.map((size) => {
-      const slice = shuffled.slice(cursor, cursor + size);
-      cursor += size;
-      return slice;
-    });
+    // Pull lifetime sit-out counts for the signed-up players in this league
+    // so we can balance assignments. People with the fewest historical
+    // sit-outs go to 5-player tables tonight; everyone else gets shielded
+    // at 4-player tables.
+    const signupIds = signups.map((s) => s.player_id);
+    const sitOutCounts = new Map<string, number>();
+    if (signupIds.length > 0) {
+      const { data: histRows } = await supabase
+        .from('game_player_winds')
+        .select('player_id')
+        .eq('league_id', lg.league.id)
+        .eq('is_sitting_out', true)
+        .in('player_id', signupIds);
+      ((histRows as any[]) || []).forEach((r) => {
+        sitOutCounts.set(r.player_id, (sitOutCounts.get(r.player_id) ?? 0) + 1);
+      });
+    }
+    const playersByTable = assignPlayersToTables(signupIds, tableSizes, sitOutCounts, night.games_planned);
 
     try {
       const tableIds = tables.map((t) => t.id);
@@ -237,8 +248,8 @@ export default function GameNightDetailPage() {
       const winds: Wind[] = ['E', 'S', 'W', 'N'];
       tables.forEach((table, ti) => {
         const sizeForThisTable = tableSizes[ti];
-        const order = shuffle(playersByTable[ti]);
-        order.forEach((pid, pos) => {
+        // playersByTable[ti] is already shuffled within the table by assignPlayersToTables
+        playersByTable[ti].forEach((pid, pos) => {
           const wind = pos < 4 ? winds[pos] : null;
           seatsPayload.push({ league_id: lg.league!.id, table_id: table.id, player_id: pid, wind });
         });
@@ -433,7 +444,7 @@ export default function GameNightDetailPage() {
                 ? `${capacityMin - signups.length} more player${capacityMin - signups.length === 1 ? '' : 's'} needed.`
                 : signups.length > capacityMax
                 ? `${signups.length - capacityMax} too many. Remove some.`
-                : 'Players will be shuffled and seated. N/S/E/W assigned per table. 5-player tables rotate one sit-out per game.'}
+                : `Players will be seated to balance sit-outs over time. Players who have sat out the least will land at 5-player tables, and within those, the least-sat are seated to sit out games 1${night.games_planned >= 2 ? `–${Math.min(night.games_planned, 5)}` : ''}.`}
             </p>
           </div>
         )}
@@ -518,7 +529,7 @@ function TableSection({
     });
     return { seat: s, member, pts, wins };
   });
-  playerTotals.sort((a, b) => b.pts - a.pts);
+  playerTotals.sort((a, b) => b.wins - a.wins || b.pts - a.pts);
 
   return (
     <section className="tile-border p-6 md:p-8">
@@ -559,17 +570,30 @@ function TableSection({
             const tally = scores[g.id] || [];
             const winner = tally.find((s) => s.is_winner);
             const winnerName = winner ? members.find((m) => m.user_id === winner.player_id)?.name : null;
+            // A completed game with no winner = wall
+            const isWall = completed && !winner && tally.length > 0;
             return (
               <button
                 key={g.id}
                 onClick={() => onOpenGame(g.id)}
                 className={`p-3 text-left border transition-all ${
-                  completed ? 'bg-jade/10 border-jade/30 hover:border-jade' : 'bg-bone border-ink/15 hover:border-ink'
+                  isWall
+                    ? 'bg-cinnabar/10 border-cinnabar/30 hover:border-cinnabar'
+                    : completed
+                      ? 'bg-jade/10 border-jade/30 hover:border-jade'
+                      : 'bg-bone border-ink/15 hover:border-ink'
                 }`}
               >
                 <div className="text-[10px] tracking-[0.2em] uppercase text-ink/50">Game {g.game_number}</div>
-                {completed && winnerName ? (
-                  <div className="mt-1 text-sm font-medium truncate">{winnerName} ✓</div>
+                {isWall ? (
+                  <div className="mt-1 text-sm font-medium font-display italic text-cinnabar">The Wall</div>
+                ) : completed && winnerName ? (
+                  <>
+                    <div className="mt-1 text-sm font-medium truncate">{winnerName} ✓</div>
+                    {winner && winner.points > 0 && (
+                      <div className="text-[10px] text-ink/50">{winner.points} pts</div>
+                    )}
+                  </>
                 ) : completed ? (
                   <div className="mt-1 text-sm italic text-ink/50">scored</div>
                 ) : (
@@ -687,34 +711,36 @@ function ScoreEntryModal({
     })
     .find((x) => x.gpw?.is_sitting_out);
 
-  const initial: Record<string, { points: string; winner: boolean }> = {};
-  playingPlayers.forEach(({ seat }) => {
-    const ex = existingScores.find((s) => s.player_id === seat.player_id);
-    initial[seat.player_id] = { points: ex ? String(ex.points) : '0', winner: ex ? ex.is_winner : false };
-  });
-  const [entries, setEntries] = useState(initial);
+  // Existing state interpretation:
+  //   - is_winner=true on any row → "winner" outcome, that player won with their points
+  //   - completed game with no is_winner → "wall"
+  //   - no existing scores → pending; default to no choice yet
+  const existingWinner = existingScores.find((s) => s.is_winner);
+  const hasExistingCompleted = existingScores.length > 0;
+  const initialOutcome: 'winner' | 'wall' | null = existingWinner
+    ? 'winner'
+    : hasExistingCompleted
+      ? 'wall'
+      : null;
+
+  const [outcome, setOutcome] = useState<'winner' | 'wall' | null>(initialOutcome);
+  const [winnerId, setWinnerId] = useState<string>(existingWinner?.player_id ?? '');
+  const [pointsStr, setPointsStr] = useState<string>(existingWinner ? String(existingWinner.points) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function setPoints(pid: string, val: string) {
-    setEntries((prev) => ({ ...prev, [pid]: { ...prev[pid], points: val } }));
-  }
-
-  function setWinner(pid: string) {
-    setEntries((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((k) => {
-        next[k] = { ...next[k], winner: k === pid ? !next[k].winner : false };
-      });
-      return next;
-    });
-  }
-
   async function save() {
-    setSaving(true);
     setError(null);
+    if (outcome === null) { setError('Choose Winner or The Wall.'); return; }
+    if (outcome === 'winner') {
+      if (!winnerId) { setError('Pick the winner.'); return; }
+      const parsed = parseInt(pointsStr, 10);
+      if (!Number.isFinite(parsed) || parsed < 0) { setError('Enter a non-negative point total for the winner.'); return; }
+    }
+
+    setSaving(true);
     try {
-      // Need league_id for inserts; pull from any existing score or fetch the game's league
+      // Resolve league_id for inserts
       let leagueId: string | undefined;
       if (existingScores.length > 0) leagueId = (existingScores[0] as any).league_id;
       if (!leagueId) {
@@ -723,14 +749,20 @@ function ScoreEntryModal({
       }
       if (!leagueId) throw new Error('Could not resolve league for this game');
 
+      // Wipe existing scores for this game and re-insert under the new model
       await supabase.from('game_scores').delete().eq('game_id', gameId);
-      const payload = playingPlayers.map(({ seat }) => ({
-        league_id: leagueId,
-        game_id: gameId,
-        player_id: seat.player_id,
-        points: parseInt(entries[seat.player_id]?.points || '0', 10) || 0,
-        is_winner: entries[seat.player_id]?.winner || false,
-      }));
+
+      const payload = playingPlayers.map(({ seat }) => {
+        const isWinner = outcome === 'winner' && seat.player_id === winnerId;
+        const points = isWinner ? parseInt(pointsStr, 10) : 0;
+        return {
+          league_id: leagueId,
+          game_id: gameId,
+          player_id: seat.player_id,
+          points,
+          is_winner: isWinner,
+        };
+      });
       const { error: insErr } = await supabase.from('game_scores').insert(payload);
       if (insErr) throw insErr;
       await supabase.from('games').update({ status: 'completed' }).eq('id', gameId);
@@ -742,7 +774,7 @@ function ScoreEntryModal({
   }
 
   async function clearAndClose() {
-    if (!confirm('Clear scores for this game?')) return;
+    if (!confirm('Clear this game\'s result?')) return;
     await supabase.from('game_scores').delete().eq('game_id', gameId);
     await supabase.from('games').update({ status: 'pending' }).eq('id', gameId);
     onSaved();
@@ -752,7 +784,7 @@ function ScoreEntryModal({
     <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 fade-up">
       <div className="bg-bone tile-border w-full max-w-lg p-7 max-h-[90vh] overflow-y-auto">
         <div className="flex items-baseline justify-between mb-2">
-          <h3 className="font-display text-3xl">Enter Scores</h3>
+          <h3 className="font-display text-3xl">Game Result</h3>
           <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
         </div>
 
@@ -762,37 +794,94 @@ function ScoreEntryModal({
           </p>
         )}
 
-        <p className="text-sm text-ink/50 italic mb-6">Points each player earned this hand. Mark the winner.</p>
+        <p className="text-sm text-ink/50 italic mb-6">How did this hand end?</p>
 
-        <div className="space-y-3">
-          {playingPlayers.map(({ seat, gpw, member }) => (
-            <div key={seat.player_id} className="grid grid-cols-12 items-center gap-3 border-b border-ink/10 pb-3 last:border-0">
-              <div className="col-span-5">
-                <div className="font-medium truncate">{member?.name}</div>
-                <div className="text-[10px] tracking-[0.2em] uppercase text-cinnabar">{gpw?.wind && WIND_LABEL[gpw.wind]}</div>
-              </div>
-              <input
-                type="number" inputMode="numeric"
-                className="input col-span-4 text-right font-display text-lg"
-                value={entries[seat.player_id]?.points ?? '0'}
-                onChange={(e) => setPoints(seat.player_id, e.target.value)}
-              />
-              <label className="col-span-3 flex items-center justify-end gap-2 text-xs tracking-[0.15em] uppercase cursor-pointer">
-                <input type="checkbox" checked={entries[seat.player_id]?.winner || false} onChange={() => setWinner(seat.player_id)} className="accent-jade w-4 h-4" />
-                Win
-              </label>
-            </div>
-          ))}
+        {/* Outcome selector */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <button
+            type="button"
+            onClick={() => setOutcome('winner')}
+            className={`p-4 border text-left transition-colors ${
+              outcome === 'winner'
+                ? 'bg-jade/10 border-jade text-ink'
+                : 'bg-bone border-ink/15 hover:border-ink/40 text-ink/70'
+            }`}
+          >
+            <div className="font-display text-xl">A Winner</div>
+            <div className="text-xs text-ink/50 italic mt-1">One player took the hand</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOutcome('wall')}
+            className={`p-4 border text-left transition-colors ${
+              outcome === 'wall'
+                ? 'bg-cinnabar/10 border-cinnabar text-ink'
+                : 'bg-bone border-ink/15 hover:border-ink/40 text-ink/70'
+            }`}
+          >
+            <div className="font-display text-xl">The Wall</div>
+            <div className="text-xs text-ink/50 italic mt-1">Tiles ran out — no winner</div>
+          </button>
         </div>
 
-        {error && <p className="text-cinnabar text-sm mt-4">{error}</p>}
+        {/* Winner details */}
+        {outcome === 'winner' && (
+          <div className="space-y-4 fade-up mb-6">
+            <div>
+              <label className="label">Winner</label>
+              <div className="grid grid-cols-2 gap-2">
+                {playingPlayers.map(({ seat, gpw, member }) => (
+                  <button
+                    key={seat.player_id}
+                    type="button"
+                    onClick={() => setWinnerId(seat.player_id)}
+                    className={`p-3 border text-left transition-colors ${
+                      winnerId === seat.player_id
+                        ? 'bg-jade/10 border-jade'
+                        : 'bg-bone border-ink/15 hover:border-ink/40'
+                    }`}
+                  >
+                    <div className="font-medium truncate">{member?.name}</div>
+                    <div className="text-[10px] tracking-[0.2em] uppercase text-cinnabar">
+                      {gpw?.wind && WIND_LABEL[gpw.wind]}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="label">Points</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                className="input font-display text-2xl text-right"
+                value={pointsStr}
+                onChange={(e) => setPointsStr(e.target.value)}
+                placeholder="0"
+                autoFocus
+              />
+              <p className="text-xs text-ink/40 italic mt-1">Only the winner scores. No negatives.</p>
+            </div>
+          </div>
+        )}
 
-        <div className="flex flex-wrap gap-3 mt-7">
-          <button onClick={save} className="btn btn-jade flex-1 justify-center" disabled={saving}>
-            {saving ? 'Saving…' : 'Save Scores'}
+        {outcome === 'wall' && (
+          <div className="border border-cinnabar/30 bg-cinnabar/5 p-4 mb-6 fade-up">
+            <p className="text-sm text-ink/70">
+              The wall ended the hand. No points awarded. The game still counts as played for everyone at the table.
+            </p>
+          </div>
+        )}
+
+        {error && <p className="text-cinnabar text-sm mb-3">{error}</p>}
+
+        <div className="flex flex-wrap gap-3">
+          <button onClick={save} className="btn btn-jade flex-1 justify-center" disabled={saving || outcome === null}>
+            {saving ? 'Saving…' : 'Save Result'}
           </button>
           <button onClick={onClose} className="btn btn-ghost">Cancel</button>
-          {existingScores.length > 0 && (
+          {hasExistingCompleted && (
             <button onClick={clearAndClose} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar ml-auto">
               Clear
             </button>
