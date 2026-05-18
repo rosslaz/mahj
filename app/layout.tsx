@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import UserMenu from '@/components/UserMenu';
+import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'Mahjong League',
@@ -51,9 +52,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center">
           Four winds · Three dragons · One platform
         </footer>
+        <InstallPrompt />
         <script
           dangerouslySetInnerHTML={{
-            __html: `if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.error)); }`,
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', async () => {
+                  try {
+                    const reg = await navigator.serviceWorker.register('/sw.js');
+                    // Check for updates on every load so deploys take effect promptly
+                    reg.update().catch(() => {});
+                    // Reload when a new SW takes control
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                      if (refreshing) return;
+                      refreshing = true;
+                      window.location.reload();
+                    });
+                  } catch (e) { console.error('SW registration failed:', e); }
+                });
+              }
+            `,
           }}
         />
       </body>
