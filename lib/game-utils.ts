@@ -135,3 +135,24 @@ export function assignPlayersToTables(
     return seats;
   });
 }
+
+// Compute a list of ISO date strings (YYYY-MM-DD) for a recurring series.
+// Repeats every `intervalWeeks` weeks from startDate, up to and including
+// endDate. Caps at 52 occurrences.
+export function computeSeriesDates(startDate: string, endDate: string, intervalWeeks: number): string[] {
+  if (!startDate || !endDate) return [];
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
+  if (end < start) return [];
+  if (intervalWeeks < 1 || intervalWeeks > 12) return [];
+
+  const dates: string[] = [];
+  const cursor = new Date(start);
+  const MAX_OCCURRENCES = 52;
+  while (cursor <= end && dates.length < MAX_OCCURRENCES) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + intervalWeeks * 7);
+  }
+  return dates;
+}

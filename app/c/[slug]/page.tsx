@@ -158,7 +158,7 @@ export default function ClubOverview() {
         <div className="flex items-baseline justify-between mb-3">
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Activities</div>
           {cb.isAdmin && activities.length > 0 && (
-            <Link href={`/c/${slug}/admin?new=activity`} className="text-xs tracking-[0.2em] uppercase text-ink/50 hover:text-cinnabar">
+            <Link href={`/c/${slug}/a/new`} className="text-xs tracking-[0.2em] uppercase text-ink/50 hover:text-cinnabar">
               + Add →
             </Link>
           )}
@@ -174,7 +174,7 @@ export default function ClubOverview() {
                 : <>The club owner hasn't set up any activities yet.</>}
             </p>
             {cb.isAdmin && (
-              <Link href={`/c/${slug}/admin?new=activity`} className="btn">+ Add Activity</Link>
+              <Link href={`/c/${slug}/a/new`} className="btn">+ Add Activity</Link>
             )}
           </div>
         ) : (

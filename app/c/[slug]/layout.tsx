@@ -38,11 +38,15 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
 
   const base = `/c/${slug}`;
   // Only club-level links here. Activity nav happens inside each activity's layout.
-  const links = [
+  type NavLink = { href: string; label: string; exact?: boolean; action?: boolean };
+  const links: NavLink[] = [
     { href: base, label: 'Overview', exact: true },
     { href: `${base}/members`, label: 'Members' },
   ];
-  if (cb.isAdmin) links.push({ href: `${base}/admin`, label: 'Admin' });
+  if (cb.isAdmin) {
+    links.push({ href: `${base}/a/new`, label: '+ Add Activity', action: true });
+    links.push({ href: `${base}/admin`, label: 'Admin' });
+  }
   if (cb.isOwner) links.push({ href: `${base}/settings`, label: 'Settings' });
 
   function isActive(href: string, exact = false) {
@@ -79,7 +83,9 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
                 className={`whitespace-nowrap transition-colors ${
                   isActive(l.href, l.exact)
                     ? 'text-cinnabar border-b-2 border-cinnabar pb-1 -mb-px'
-                    : 'text-ink/60 hover:text-ink pb-1'
+                    : l.action
+                      ? 'text-jade hover:text-cinnabar font-medium pb-1'
+                      : 'text-ink/60 hover:text-ink pb-1'
                 }`}
               >
                 {l.label}

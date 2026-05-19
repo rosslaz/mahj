@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
-import { ACTIVITY_TYPE_LABEL, ACTIVITY_TYPE_DESCRIPTION, type ActivityType } from '@/lib/use-activity';
-import { slugify } from '@/lib/slug';
+import { ACTIVITY_TYPE_LABEL, type ActivityType } from '@/lib/use-activity';
 
 type Member = {
   user_id: string;
@@ -24,49 +23,18 @@ type Activity = {
   is_public: boolean;
 };
 
-const ACTIVITY_TYPES: ActivityType[] = ['league', 'tournament', 'class', 'open_play'];
-
-// Reserved activity slugs to avoid collisions with club-level routes
-const RESERVED_SLUGS = new Set(['members', 'admin', 'settings', 'overview']);
-
-function randomSuffix(len = 4): string {
-  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-  let out = '';
-  for (let i = 0; i < len; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return out;
-}
-
 export default function ClubAdminPage() {
-  return (
-    <Suspense fallback={<p className="text-ink/40 italic">Loading…</p>}>
-      <ClubAdminPageInner />
-    </Suspense>
-  );
-}
-
-function ClubAdminPageInner() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const slug = params.slug as string;
   const auth = useAuth();
   const cb = useClub(slug);
   const supabase = getBrowserSupabase();
-  const router = useRouter();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState<string | null>(null);
-
-  // Activity-creation form
-  const [showNewActivity, setShowNewActivity] = useState(searchParams.get('new') === 'activity');
-  const [newType, setNewType] = useState<ActivityType>('league');
-  const [newName, setNewName] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newIsPublic, setNewIsPublic] = useState(false);
-  const [creatingActivity, setCreatingActivity] = useState(false);
-  const [activityError, setActivityError] = useState<string | null>(null);
 
   async function load() {
     if (!cb.club) return;
@@ -144,55 +112,6 @@ function ClubAdminPageInner() {
     else setJoinCode(newCode);
   }
 
-  async function pickActivitySlug(base: string): Promise<string> {
-    if (!cb.club) return base;
-    let candidate = base || 'activity';
-    if (RESERVED_SLUGS.has(candidate)) candidate = `${candidate}-${randomSuffix(4)}`;
-    if (candidate.length > 50) candidate = candidate.slice(0, 50);
-    const { data } = await supabase
-      .from('activities')
-      .select('id')
-      .eq('club_id', cb.club.id)
-      .eq('slug', candidate)
-      .maybeSingle();
-    if (!data) return candidate;
-    for (let attempts = 0; attempts < 8; attempts++) {
-      const suffixed = `${candidate}-${randomSuffix(4)}`;
-      const res = await supabase.from('activities').select('id').eq('club_id', cb.club.id).eq('slug', suffixed).maybeSingle();
-      if (!res.data) return suffixed;
-    }
-    return `${candidate}-${randomSuffix(8)}`;
-  }
-
-  async function createActivity(e: React.FormEvent) {
-    e.preventDefault();
-    setActivityError(null);
-    if (!newName.trim()) { setActivityError('Name is required.'); return; }
-    if (!cb.club) return;
-
-    setCreatingActivity(true);
-    try {
-      const aSlug = await pickActivitySlug(slugify(newName.trim()));
-      const { data, error } = await supabase
-        .from('activities')
-        .insert({
-          club_id: cb.club.id,
-          slug: aSlug,
-          name: newName.trim(),
-          description: newDescription.trim() || null,
-          type: newType,
-          is_public: newIsPublic,
-        })
-        .select()
-        .single();
-      if (error || !data) throw new Error(error?.message || 'Could not create activity.');
-      router.push(`/c/${slug}/a/${aSlug}`);
-    } catch (e: any) {
-      setActivityError(e.message);
-      setCreatingActivity(false);
-    }
-  }
-
   const filtered = members.filter((m) => {
     if (!filter) return true;
     const q = filter.toLowerCase();
@@ -207,89 +126,12 @@ function ClubAdminPageInner() {
         <h1 className="font-display text-5xl md:text-6xl">Admin</h1>
       </header>
 
-      {/* Activities management */}
+      {/* Activities list (creation lives at /a/new) */}
       <section>
         <div className="flex items-baseline justify-between mb-5 flex-wrap gap-3">
           <h2 className="font-display text-3xl">Activities</h2>
-          {!showNewActivity && (
-            <button onClick={() => setShowNewActivity(true)} className="btn">+ Add Activity</button>
-          )}
-          {showNewActivity && (
-            <button onClick={() => { setShowNewActivity(false); setActivityError(null); }} className="btn btn-ghost">Cancel</button>
-          )}
+          <Link href={`/c/${slug}/a/new`} className="btn">+ Add Activity</Link>
         </div>
-
-        {showNewActivity && (
-          <form onSubmit={createActivity} className="tile-border p-6 space-y-5 mb-5 fade-up">
-            <div>
-              <label className="label">Type <span className="text-cinnabar">*</span></label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {ACTIVITY_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setNewType(t)}
-                    className={`p-3 border text-left transition-colors ${
-                      newType === t
-                        ? 'bg-jade/10 border-jade'
-                        : 'bg-bone border-ink/15 hover:border-ink/40'
-                    }`}
-                  >
-                    <div className="font-display text-lg">{ACTIVITY_TYPE_LABEL[t]}</div>
-                    <div className="text-[10px] text-ink/50 italic leading-snug mt-0.5">{ACTIVITY_TYPE_DESCRIPTION[t]}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="label">Name <span className="text-cinnabar">*</span></label>
-              <input
-                className="input"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder={
-                  newType === 'league' ? 'Tuesday Night League' :
-                  newType === 'tournament' ? 'Spring Tournament 2026' :
-                  newType === 'class' ? 'Beginner Class — Spring' :
-                  'Wednesday Open Play'
-                }
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Description <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span></label>
-              <textarea
-                className="input min-h-[70px] resize-y"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                rows={2}
-              />
-            </div>
-            <div>
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newIsPublic}
-                  onChange={(e) => setNewIsPublic(e.target.checked)}
-                  className="accent-jade w-4 h-4 mt-1"
-                />
-                <span>
-                  <span className="block text-sm font-medium">Public activity</span>
-                  <span className="text-xs text-ink/50 italic">Discoverable outside the club. Only takes effect if the club is also public.</span>
-                </span>
-              </label>
-            </div>
-            {activityError && <p className="text-cinnabar text-sm">{activityError}</p>}
-            <div className="flex gap-3 pt-2">
-              <button className="btn btn-jade" disabled={creatingActivity}>
-                {creatingActivity ? 'Creating…' : 'Create Activity'}
-              </button>
-              <button type="button" onClick={() => { setShowNewActivity(false); setActivityError(null); }} className="btn btn-ghost">
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
 
         {loading ? (
           <p className="text-ink/40 italic">Loading…</p>
