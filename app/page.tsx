@@ -78,7 +78,7 @@ export default function HomePage() {
       if (clubIds.length > 0) {
         const { data: gnData } = await supabase
           .from('events')
-          .select('id, name, date, start_time, num_tables, games_planned, status, club_id, activity_id, host:host_player_id(id, name), signups:night_signups(count), tables(assigned), activity:activity_id(id, slug, name, type)')
+          .select('id, name, date, start_time, num_tables, games_planned, status, club_id, activity_id, host:host_player_id(id, name), tables(assigned), activity:activity_id(id, slug, name, type)')
           .in('club_id', clubIds)
           .gte('date', today)
           .eq('status', 'active')
@@ -89,14 +89,20 @@ export default function HomePage() {
 
         const raw = (gnData as any[]) || [];
         const eventIds = raw.map((r) => r.id);
+
+        // Fetch approved signups for these events to count them and find mine
+        let approvedCountByEvent = new Map<string, number>();
         let mySignupSet = new Set<string>();
         if (eventIds.length > 0) {
-          const { data: mySU } = await supabase
+          const { data: suData } = await supabase
             .from('night_signups')
-            .select('event_id')
-            .eq('player_id', auth.userId!)
-            .in('event_id', eventIds);
-          mySignupSet = new Set(((mySU as any[]) || []).map((r) => r.event_id));
+            .select('event_id, player_id')
+            .in('event_id', eventIds)
+            .eq('status', 'approved');
+          ((suData as any[]) || []).forEach((r) => {
+            approvedCountByEvent.set(r.event_id, (approvedCountByEvent.get(r.event_id) ?? 0) + 1);
+            if (r.player_id === auth.userId) mySignupSet.add(r.event_id);
+          });
         }
 
         allUpcoming = raw
@@ -117,7 +123,7 @@ export default function HomePage() {
               games_planned: g.games_planned,
               status: g.status,
               host: g.host,
-              signup_count: g.signups?.[0]?.count ?? 0,
+              signup_count: approvedCountByEvent.get(g.id) ?? 0,
               assigned: (g.tables || []).some((t: any) => t.assigned),
               club_id: g.club_id,
               club_slug: club.slug,
@@ -149,23 +155,48 @@ export default function HomePage() {
       // -------- Action items --------
       const items: ActionItem[] = [];
       if (clubIds.length > 0) {
-        // Hosting upcoming events with no signups
+        // Hosting upcoming events — surface "no approved signups" and
+        // "pending approvals" as separate action items.
         const { data: hostingEvents } = await supabase
           .from('events')
-          .select('id, name, date, club_id, activity:activity_id(slug), signups:night_signups(count)')
+          .select('id, name, date, club_id, activity:activity_id(slug, is_public)')
           .in('club_id', clubIds)
           .eq('host_player_id', auth.userId!)
           .gte('date', today)
           .eq('status', 'active')
           .is('deleted_at', null);
+        const hostingEventIds = ((hostingEvents as any[]) || []).map((g) => g.id);
+        let signupTallies = new Map<string, { approved: number; pending: number }>();
+        if (hostingEventIds.length > 0) {
+          const { data: tallyData } = await supabase
+            .from('night_signups')
+            .select('event_id, status')
+            .in('event_id', hostingEventIds);
+          ((tallyData as any[]) || []).forEach((r) => {
+            const t = signupTallies.get(r.event_id) ?? { approved: 0, pending: 0 };
+            if (r.status === 'approved') t.approved += 1;
+            else if (r.status === 'pending') t.pending += 1;
+            signupTallies.set(r.event_id, t);
+          });
+        }
         ((hostingEvents as any[]) || []).forEach((g) => {
-          const c = g.signups?.[0]?.count ?? 0;
-          if (c === 0 && g.activity) {
-            const cSlug = myClubs.find((c) => c.id === g.club_id)?.slug;
+          if (!g.activity) return;
+          const tally = signupTallies.get(g.id) ?? { approved: 0, pending: 0 };
+          const cSlug = myClubs.find((c) => c.id === g.club_id)?.slug;
+          const href = `/c/${cSlug}/a/${g.activity.slug}/events/${g.id}`;
+          if (tally.pending > 0) {
+            items.push({
+              id: 'pending-' + g.id,
+              label: `"${g.name}" has ${tally.pending} pending signup${tally.pending === 1 ? '' : 's'} awaiting your approval`,
+              href,
+              tone: 'warn',
+            });
+          }
+          if (tally.approved === 0) {
             items.push({
               id: 'host-' + g.id,
               label: `You're hosting "${g.name}" — no signups yet`,
-              href: `/c/${cSlug}/a/${g.activity.slug}/events/${g.id}`,
+              href,
               tone: 'warn',
             });
           }

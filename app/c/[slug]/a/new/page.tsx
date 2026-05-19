@@ -193,6 +193,13 @@ export default function NewActivityPage() {
     const zipErr = validateZip(addr.zip);
     if (zipErr) { setError(zipErr); return; }
 
+    // Public events (public activity + public club) require city + state
+    const willBePublicEvent = isPublic && cb.club!.is_public;
+    if (willBePublicEvent) {
+      if (!addr.city.trim()) { setError('City is required for public events.'); return; }
+      if (!addr.state) { setError('State is required for public events.'); return; }
+    }
+
     // Compute the dates we need
     const series = usesSeries(type);
     let dates: string[];
@@ -376,7 +383,15 @@ export default function NewActivityPage() {
               />
               <span>
                 <span className="block text-sm font-medium">Public</span>
-                <span className="text-xs text-ink/50 italic">Discoverable outside the club. Only takes effect if the club is also public.</span>
+                {cb.club.is_public ? (
+                  <span className="text-xs text-ink/50 italic block">
+                    Discoverable outside the club. Public events require a city + state, and non-members signing up will need host approval before they see the street address.
+                  </span>
+                ) : (
+                  <span className="text-xs text-ink/50 italic block">
+                    Marking this public has no effect right now because <strong>{cb.club.name}</strong> is itself private. Both the club and the activity need to be public for non-members to see it.
+                  </span>
+                )}
               </span>
             </label>
           </div>
@@ -471,8 +486,11 @@ export default function NewActivityPage() {
           )}
 
           <div>
-            <label className="label">Location <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span></label>
-            <AddressFields value={addr} onChange={setAddr} />
+            <AddressFields
+              value={addr}
+              onChange={setAddr}
+              mode={isPublic && cb.club.is_public ? 'public_event' : 'optional'}
+            />
             {hostId && (
               <p className="text-xs text-ink/40 italic mt-1">Filled from host's profile. Edit if a different location.</p>
             )}

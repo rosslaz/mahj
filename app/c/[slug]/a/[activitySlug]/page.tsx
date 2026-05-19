@@ -53,7 +53,7 @@ export default function ActivityOverview() {
       // Next event in this activity
       const { data: upcomingData } = await supabase
         .from('events')
-        .select('id, name, date, start_time, num_tables, games_planned, status, host:host_player_id(id, name), signups:night_signups(count), tables(assigned)')
+        .select('id, name, date, start_time, num_tables, games_planned, status, host:host_player_id(id, name), tables(assigned)')
         .eq('activity_id', act.activity!.id)
         .gte('date', today)
         .eq('status', 'active')
@@ -63,8 +63,17 @@ export default function ActivityOverview() {
         .limit(1);
 
       let nextN: NextEventNight | null = null;
+      let pStatus: PersonalStatus = { kind: 'none' };
       if (upcomingData && upcomingData.length > 0) {
         const g: any = upcomingData[0];
+
+        // Pull signups for this event so we can count approved + look up self
+        const { data: signupData } = await supabase
+          .from('night_signups')
+          .select('player_id, status')
+          .eq('event_id', g.id);
+        const approvedCount = ((signupData as any[]) || []).filter((s) => s.status === 'approved').length;
+
         nextN = {
           id: g.id,
           name: g.name,
@@ -74,25 +83,22 @@ export default function ActivityOverview() {
           games_planned: g.games_planned,
           status: g.status,
           host: g.host,
-          signup_count: g.signups?.[0]?.count ?? 0,
+          signup_count: approvedCount,
           assigned: (g.tables || []).some((t: any) => t.assigned),
         };
-        setNextEventSignupCount(nextN.signup_count ?? 0);
-      }
-      setNextEvent(nextN);
+        setNextEventSignupCount(approvedCount);
 
-      // Personal status
-      let pStatus: PersonalStatus = { kind: 'none' };
-      if (nextN && auth.userId) {
-        if (nextN.host?.id === auth.userId) {
-          pStatus = { kind: 'hosting' };
-        } else {
-          const { data: mySU } = await supabase
-            .from('night_signups').select('id')
-            .eq('event_id', nextN.id).eq('player_id', auth.userId).maybeSingle();
-          pStatus = mySU ? { kind: 'signed_up' } : { kind: 'not_signed_up' };
+        // Personal status
+        if (auth.userId) {
+          if (g.host?.id === auth.userId) {
+            pStatus = { kind: 'hosting' };
+          } else {
+            const mine = ((signupData as any[]) || []).find((s) => s.player_id === auth.userId);
+            pStatus = mine && mine.status === 'approved' ? { kind: 'signed_up' } : { kind: 'not_signed_up' };
+          }
         }
       }
+      setNextEvent(nextN);
       setPersonalStatus(pStatus);
 
       // Leaderboard (only for scoring activities)

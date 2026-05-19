@@ -33,7 +33,7 @@ type Member = {
   state: string | null;
   zip: string | null;
 };
-type Signup = { id: string; player_id: string };
+type Signup = { id: string; player_id: string; status: 'approved' | 'pending'; created_at?: string };
 type Table = { id: string; table_number: number; assigned: boolean };
 type Seat = { id: string; table_id: string; player_id: string; wind: Wind | null };
 type Game = { id: string; table_id: string; game_number: number; status: string };
@@ -73,7 +73,7 @@ export default function EventDetailPage() {
     const [nightRes, tablesRes, signupsRes, membersRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).eq('club_id', cb.club.id).single(),
       supabase.from('tables').select('*').eq('event_id', id).order('table_number'),
-      supabase.from('night_signups').select('id, player_id').eq('event_id', id),
+      supabase.from('night_signups').select('id, player_id, status, created_at').eq('event_id', id),
       supabase.from('club_members')
         .select('user_id, user:user_id(name, street, city, state, zip, deleted_at)')
         .eq('club_id', cb.club.id),
@@ -143,11 +143,30 @@ export default function EventDetailPage() {
   const isHost = !!auth.userId && night.host_player_id === auth.userId;
   const canManage = isHost || cb.isAdmin;
   const isAssigned = tables.some((t) => t.assigned);
-  const signedUpIds = new Set(signups.map((s) => s.player_id));
-  const userSignedUp = !!auth.userId && signedUpIds.has(auth.userId);
+
+  // Split signups into approved (count toward capacity, get tables, see street)
+  // vs pending (awaiting host approval — public events only).
+  const approvedSignups = signups.filter((s) => s.status === 'approved');
+  const pendingSignups = signups.filter((s) => s.status === 'pending');
+  const approvedIds = new Set(approvedSignups.map((s) => s.player_id));
+  const userApproved = !!auth.userId && approvedIds.has(auth.userId);
+  const userPending = !!auth.userId && pendingSignups.some((s) => s.player_id === auth.userId);
+  const userSignedUp = userApproved || userPending;
+
+  // Is this a public event? (Activity AND club both public.)
+  // The activity is public iff act.activity.is_public; the club is public
+  // iff cb.club.is_public.
+  const isPublicEvent = !!(act.activity?.is_public && cb.club?.is_public);
+
+  // Can this user see the street address?
+  //   - Always for club members
+  //   - For non-members: only if they have an approved signup
+  const canSeeStreet = cb.isMember || userApproved;
 
   const capacityMin = night.num_tables * 4;
   const capacityMax = night.num_tables * 5;
+  // Capacity check uses approved only — pending signups don't reserve seats.
+  const approvedCount = approvedSignups.length;
 
   // --- ACTIONS ---
 
@@ -162,6 +181,19 @@ export default function EventDetailPage() {
       updates.state = claimer.state;
       updates.zip = claimer.zip;
     }
+    // For public events without city/state info, warn the user before submitting
+    // (the DB trigger would reject otherwise).
+    if (isPublicEvent) {
+      const proposedCity = updates.city ?? night.city;
+      const proposedState = updates.state ?? night.state;
+      if (!proposedCity || !proposedState) {
+        alert(
+          "This is a public event, which requires city and state. " +
+          "Set those on your profile or on the event before claiming host."
+        );
+        return;
+      }
+    }
     const { error } = await supabase.from('events').update(updates).eq('id', id);
     if (error) alert(error.message); else load();
   }
@@ -174,11 +206,18 @@ export default function EventDetailPage() {
 
   async function selfSignup() {
     if (!auth.userId || !cb.club) return;
-    if (signups.length >= capacityMax) { alert('Signups are full.'); return; }
+    // For club members, auto-approve (status='approved'). For non-members
+    // signing up to a public event, status='pending' — host must approve.
+    const status = cb.isMember ? 'approved' : 'pending';
+    if (status === 'approved' && approvedCount >= capacityMax) {
+      alert('Signups are full.');
+      return;
+    }
     const { error } = await supabase.from('night_signups').insert({
       club_id: cb.club.id,
       event_id: id,
       player_id: auth.userId,
+      status,
     });
     if (error) alert(error.message); else load();
   }
@@ -189,12 +228,35 @@ export default function EventDetailPage() {
     if (error) alert(error.message); else load();
   }
 
+  async function approvePending(signupId: string) {
+    if (!cb.club) return;
+    // Capacity sanity check (host could be trying to approve into a full event)
+    if (approvedCount >= capacityMax) {
+      if (!confirm(`The event is already at capacity (${capacityMax}). Approve anyway? It'll be over capacity.`)) return;
+    }
+    const { error } = await supabase
+      .from('night_signups')
+      .update({ status: 'approved' })
+      .eq('id', signupId);
+    if (error) alert(error.message); else load();
+  }
+
+  async function declinePending(signupId: string) {
+    if (!confirm('Decline this signup request? The user will not be approved.')) return;
+    const { error } = await supabase
+      .from('night_signups')
+      .delete()
+      .eq('id', signupId);
+    if (error) alert(error.message); else load();
+  }
+
   async function addPlayer(playerId: string) {
     if (!cb.club) return;
     const { error } = await supabase.from('night_signups').insert({
       club_id: cb.club.id,
       event_id: id,
       player_id: playerId,
+      status: 'approved',  // host-added members bypass any approval flow
     });
     if (error) alert(error.message);
     else { setShowAddPlayer(false); load(); }
@@ -208,11 +270,11 @@ export default function EventDetailPage() {
 
   async function assignTables() {
     if (!night || !cb.club) return;
-    if (signups.length < capacityMin) { alert(`Need at least ${capacityMin} players to assign tables.`); return; }
-    if (signups.length > capacityMax) { alert(`Too many players. Max is ${capacityMax}.`); return; }
+    if (approvedCount < capacityMin) { alert(`Need at least ${capacityMin} approved players to assign tables.`); return; }
+    if (approvedCount > capacityMax) { alert(`Too many players. Max is ${capacityMax}.`); return; }
     if (isAssigned && !confirm('Re-assign tables? Pending games will be wiped and re-seeded. Scored games are preserved.')) return;
 
-    const total = signups.length;
+    const total = approvedCount;
     const fivePlayerTables = total - capacityMin;
     const tableSizes: (4 | 5)[] = Array.from({ length: night.num_tables }, (_, i) =>
       i < fivePlayerTables ? 5 : 4
@@ -222,7 +284,7 @@ export default function EventDetailPage() {
     // so we can balance assignments. People with the fewest historical
     // sit-outs go to 5-player tables tonight; everyone else gets shielded
     // at 4-player tables.
-    const signupIds = signups.map((s) => s.player_id);
+    const signupIds = approvedSignups.map((s) => s.player_id);
     const sitOutCounts = new Map<string, number>();
     if (signupIds.length > 0) {
       const { data: histRows } = await supabase
@@ -322,8 +384,13 @@ export default function EventDetailPage() {
       await supabase.from('game_player_winds').update({ player_id: newPlayerId }).in('game_id', tableGameIds).eq('player_id', oldPlayerId);
     }
 
-    if (!signedUpIds.has(newPlayerId)) {
-      await supabase.from('night_signups').insert({ club_id: cb.club.id, event_id: id, player_id: newPlayerId });
+    if (!approvedIds.has(newPlayerId)) {
+      await supabase.from('night_signups').insert({
+        club_id: cb.club.id,
+        event_id: id,
+        player_id: newPlayerId,
+        status: 'approved',
+      });
     }
     await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', oldPlayerId);
 
@@ -342,7 +409,11 @@ export default function EventDetailPage() {
   }
 
   // --- RENDER ---
-  const addressLines = formatAddressLines(night);
+  // For public events, non-members without an approved signup don't get
+  // the street. Build the address display from a possibly-redacted copy.
+  const displayedNight = canSeeStreet ? night : { ...night, street: null };
+  const addressLines = formatAddressLines(displayedNight);
+  const streetIsHidden = !canSeeStreet && !!night.street;
 
   return (
     <div className="space-y-12">
@@ -363,6 +434,11 @@ export default function EventDetailPage() {
             {addressLines.length > 0 && (
               <div className="text-sm">
                 {addressLines.map((line, idx) => <div key={idx}>{line}</div>)}
+                {streetIsHidden && (
+                  <div className="text-xs italic text-ink/40 mt-1">
+                    Street address shown after the host approves your signup.
+                  </div>
+                )}
               </div>
             )}
             <div className="text-sm">
@@ -389,15 +465,26 @@ export default function EventDetailPage() {
           <div>
             <h2 className="font-display text-3xl">Signed Up</h2>
             <p className="text-sm text-ink/50 italic mt-1">
-              {signups.length} / {capacityMax} · need {capacityMin} to play
+              {approvedCount} / {capacityMax} · need {capacityMin} to play
+              {pendingSignups.length > 0 && (
+                <> · <span className="text-cinnabar">{pendingSignups.length} pending approval</span></>
+              )}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {auth.userId && cb.isMember && !userSignedUp && signups.length < capacityMax && (
+            {/* Member signup: auto-approved */}
+            {auth.userId && cb.isMember && !userSignedUp && approvedCount < capacityMax && (
               <button onClick={selfSignup} className="btn btn-jade">Sign me up</button>
             )}
-            {auth.userId && userSignedUp && !isAssigned && (
+            {/* Non-member signup for public event: pending approval */}
+            {auth.userId && !cb.isMember && isPublicEvent && !userSignedUp && (
+              <button onClick={selfSignup} className="btn btn-jade">Request to join</button>
+            )}
+            {auth.userId && userApproved && !isAssigned && (
               <button onClick={selfWithdraw} className="btn btn-ghost text-xs">Withdraw</button>
+            )}
+            {auth.userId && userPending && (
+              <button onClick={selfWithdraw} className="btn btn-ghost text-xs">Cancel request</button>
             )}
             {canManage && (
               <button onClick={() => setShowAddPlayer(true)} className="btn btn-ghost text-xs">+ Add player</button>
@@ -405,11 +492,55 @@ export default function EventDetailPage() {
           </div>
         </div>
 
-        {signups.length === 0 ? (
+        {/* User's own pending state callout */}
+        {userPending && (
+          <div className="border border-cinnabar/30 bg-cinnabar/5 p-4 mb-5 text-sm">
+            Your request to join is awaiting host approval. You'll see the full address once approved.
+          </div>
+        )}
+
+        {/* Pending list (host/admin view only) */}
+        {canManage && pendingSignups.length > 0 && (
+          <div className="mb-6 border-l-2 border-cinnabar pl-4">
+            <div className="text-xs tracking-[0.2em] uppercase text-cinnabar mb-3">
+              Pending Approval ({pendingSignups.length})
+            </div>
+            <ul className="divide-y divide-ink/10">
+              {pendingSignups.map((s) => {
+                const member = members.find((m) => m.user_id === s.player_id);
+                // Non-members aren't in club_members, so name lookup fails. Show their user info.
+                return (
+                  <li key={s.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-sm">
+                      <span className="font-medium">{member?.name || `User ${s.player_id.slice(0, 8)}`}</span>
+                      {!member && <span className="text-ink/40 ml-2 text-xs italic">not a club member</span>}
+                    </span>
+                    <span className="flex gap-2">
+                      <button
+                        onClick={() => approvePending(s.id)}
+                        className="text-xs tracking-[0.15em] uppercase text-jade hover:underline"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => declinePending(s.id)}
+                        className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                      >
+                        Decline
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {approvedSignups.length === 0 ? (
           <p className="text-ink/40 italic">No one's signed up yet.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {signups.map((s) => {
+            {approvedSignups.map((s) => {
               const member = members.find((m) => m.user_id === s.player_id);
               const isSeated = seats.some((seat) => seat.player_id === s.player_id);
               return (
@@ -440,15 +571,15 @@ export default function EventDetailPage() {
             <button
               onClick={assignTables}
               className="btn btn-jade"
-              disabled={signups.length < capacityMin || signups.length > capacityMax}
+              disabled={approvedCount < capacityMin || approvedCount > capacityMax}
             >
               {isAssigned ? 'Re-assign Tables' : 'Assign Tables'}
             </button>
             <p className="text-xs text-ink/50 italic">
-              {signups.length < capacityMin
-                ? `${capacityMin - signups.length} more player${capacityMin - signups.length === 1 ? '' : 's'} needed.`
-                : signups.length > capacityMax
-                ? `${signups.length - capacityMax} too many. Remove some.`
+              {approvedCount < capacityMin
+                ? `${capacityMin - approvedCount} more player${capacityMin - approvedCount === 1 ? '' : 's'} needed.`
+                : approvedCount > capacityMax
+                ? `${approvedCount - capacityMax} too many. Remove some.`
                 : `Players will be seated to balance sit-outs over time. Players who have sat out the least will land at 5-player tables, and within those, the least-sat are seated to sit out games 1${night.games_planned >= 2 ? `–${Math.min(night.games_planned, 5)}` : ''}.`}
             </p>
           </div>
@@ -480,7 +611,7 @@ export default function EventDetailPage() {
 
       {showAddPlayer && (
         <AddPlayerModal
-          members={members.filter((m) => !signedUpIds.has(m.user_id))}
+          members={members.filter((m) => !approvedIds.has(m.user_id))}
           onClose={() => setShowAddPlayer(false)}
           onAdd={addPlayer}
         />

@@ -58,7 +58,7 @@ export default function ClubOverview() {
       const today = new Date().toISOString().slice(0, 10);
       const { data: gnData } = await supabase
         .from('events')
-        .select('id, name, date, start_time, num_tables, games_planned, status, activity_id, host:host_player_id(id, name), signups:night_signups(count), tables(assigned)')
+        .select('id, name, date, start_time, num_tables, games_planned, status, activity_id, host:host_player_id(id, name), tables(assigned)')
         .eq('club_id', cb.club!.id)
         .gte('date', today)
         .eq('status', 'active')
@@ -72,18 +72,19 @@ export default function ClubOverview() {
         const g: any = gnData[0];
         const act = acts.find((a) => a.id === g.activity_id);
         if (act) {
+          // Count approved signups for this event + look up the user's own status
+          const { data: signupData } = await supabase
+            .from('night_signups')
+            .select('player_id, status')
+            .eq('event_id', g.id);
+          const approvedCount = ((signupData as any[]) || []).filter((s) => s.status === 'approved').length;
           let personal: PersonalStatus = { kind: 'none' };
           if (auth.userId) {
             if (g.host?.id === auth.userId) {
               personal = { kind: 'hosting' };
             } else {
-              const { data: mySU } = await supabase
-                .from('night_signups')
-                .select('id')
-                .eq('event_id', g.id)
-                .eq('player_id', auth.userId)
-                .maybeSingle();
-              personal = mySU ? { kind: 'signed_up' } : { kind: 'not_signed_up' };
+              const mine = ((signupData as any[]) || []).find((s) => s.player_id === auth.userId);
+              personal = mine && mine.status === 'approved' ? { kind: 'signed_up' } : { kind: 'not_signed_up' };
             }
           }
           next = {
@@ -95,7 +96,7 @@ export default function ClubOverview() {
             games_planned: g.games_planned,
             status: g.status,
             host: g.host,
-            signup_count: g.signups?.[0]?.count ?? 0,
+            signup_count: approvedCount,
             assigned: (g.tables || []).some((t: any) => t.assigned),
             activity_id: g.activity_id,
             activity_slug: act.slug,

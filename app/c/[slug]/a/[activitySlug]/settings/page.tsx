@@ -124,7 +124,15 @@ export default function ActivitySettingsPage() {
             />
             <span>
               <span className="block text-sm font-medium">Public activity</span>
-              <span className="text-xs text-ink/50 italic">Discoverable outside the club. Only takes effect if the club is also public.</span>
+              {cb.club.is_public ? (
+                <span className="text-xs text-ink/50 italic block">
+                  Discoverable outside the club. Events under this activity will require a city + state, and non-members signing up will need host approval to see the street address.
+                </span>
+              ) : (
+                <span className="text-xs text-ink/50 italic block">
+                  Marking this public has no effect right now because <strong>{cb.club.name}</strong> is itself private.
+                </span>
+              )}
             </span>
           </label>
         </div>

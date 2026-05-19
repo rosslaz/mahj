@@ -137,20 +137,32 @@ export default function ActivityEventsPage() {
   async function load() {
     if (!cb.club || !act.activity) return;
     setLoading(true);
-    const [nightsRes, membersRes] = await Promise.all([
+    const [nightsRes, membersRes, signupsRes] = await Promise.all([
       supabase.from('events')
-        .select('id, name, date, start_time, num_tables, games_planned, status, host:host_player_id(id, name), signups:night_signups(count), tables(assigned)')
+        .select('id, name, date, start_time, num_tables, games_planned, status, host:host_player_id(id, name), tables(assigned)')
         .eq('activity_id', act.activity.id)
         .is('deleted_at', null)
         .order('date', { ascending: false }),
       supabase.from('club_members')
         .select('user_id, user:user_id(name, street, city, state, zip, deleted_at)')
         .eq('club_id', cb.club.id),
+      // Pull approved signups for this activity's events so we can count them
+      // in JS — easier than a per-event aggregate with status filter.
+      supabase.from('night_signups')
+        .select('event_id, player_id, status')
+        .eq('club_id', cb.club.id)
+        .eq('status', 'approved'),
     ]);
+
+    // Build approved-signup count per event
+    const approvedByEvent = new Map<string, number>();
+    ((signupsRes.data as any[]) || []).forEach((r) => {
+      approvedByEvent.set(r.event_id, (approvedByEvent.get(r.event_id) ?? 0) + 1);
+    });
 
     const list = ((nightsRes.data as any[]) || []).map((n) => ({
       ...n,
-      signup_count: n.signups?.[0]?.count ?? 0,
+      signup_count: approvedByEvent.get(n.id) ?? 0,
       assigned: (n.tables || []).some((t: any) => t.assigned),
     }));
     setNights(list);
@@ -165,19 +177,14 @@ export default function ActivityEventsPage() {
       .sort((a, b) => a.name.localeCompare(b.name))
     );
 
-    // Which of these nights am I signed up for?
+    // Which of these nights am I APPROVED for? (Pending doesn't count as "in.")
     if (auth.userId) {
-      const nightIds = list.map((n) => n.id);
-      if (nightIds.length > 0) {
-        const { data: mySU } = await supabase
-          .from('night_signups')
-          .select('event_id')
-          .eq('player_id', auth.userId)
-          .in('event_id', nightIds);
-        setMySignedUpNightIds(new Set(((mySU as any[]) || []).map((r) => r.event_id)));
-      } else {
-        setMySignedUpNightIds(new Set());
-      }
+      const myApproved = ((signupsRes.data as any[]) || [])
+        .filter((r) => r.player_id === auth.userId)
+        .map((r) => r.event_id);
+      setMySignedUpNightIds(new Set(myApproved));
+    } else {
+      setMySignedUpNightIds(new Set());
     }
 
     setLoading(false);
