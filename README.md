@@ -1,4 +1,6 @@
-# 麻將 Mahjong League — v2.0
+# 麻將 Pungctual — v2.1
+
+> A platform for mahjong clubs. Where the meld is **pung**, and showing up is **punctual**.
 
 A multi-tenant platform for running mahjong clubs. Each **club** can host multiple **activities**: leagues, tournaments, classes, or open play sessions.
 

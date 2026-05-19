@@ -1,4 +1,4 @@
-/* Mahjong League service worker
+/* Pungctual service worker
  *
  * Strategy:
  *   - Static assets (icons, manifest, background): cache-first.
@@ -17,9 +17,9 @@
  * fresh cache so users don't get pinned to old HTML forever.
  */
 
-const CACHE_VERSION = 'v3-2026-05-17';     // bump on every deploy
-const STATIC_CACHE = `mahjong-static-${CACHE_VERSION}`;
-const RUNTIME_CACHE = `mahjong-runtime-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v4-2026-05-19';     // bump on every deploy
+const STATIC_CACHE = `pungctual-static-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `pungctual-runtime-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   '/manifest.json',
@@ -124,7 +124,7 @@ const OFFLINE_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Offline — Mahjong League</title>
+<title>Offline — Pungctual</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
@@ -143,7 +143,7 @@ const OFFLINE_HTML = `<!doctype html>
     <div class="glyph">發</div>
     <h1>Offline</h1>
     <p>No connection right now. We'll be back as soon as you're online again.</p>
-    <p class="note">Mahjong League</p>
+    <p class="note">Pungctual</p>
   </main>
 </body>
 </html>`;

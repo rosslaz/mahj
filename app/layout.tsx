@@ -5,10 +5,10 @@ import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
-  title: 'Mahjong League',
+  title: 'Pungctual',
   description: 'Track game nights, scores and standings for your mahjong league.',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Mahjong League' },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Pungctual' },
   icons: { icon: '/icon.svg', apple: '/icon.svg' },
 };
 
@@ -38,8 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="font-display text-2xl text-jade font-semibold">發</span>
               </div>
               <div>
-                <div className="font-display text-2xl leading-none tracking-tight">Mahjong League</div>
-                <div className="text-[10px] tracking-[0.3em] uppercase text-ink/50 mt-1">platform</div>
+                <div className="font-display text-2xl leading-none tracking-tight">Pungctual</div>
+                <div className="text-[10px] tracking-[0.3em] uppercase text-ink/50 mt-1">mahjong, on time</div>
               </div>
             </Link>
             <div className="flex items-center gap-6 text-sm">
@@ -50,7 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="max-w-6xl mx-auto px-6 py-10">{children}</main>
         <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center">
-          Four winds · Three dragons · One platform
+          Four winds · Three dragons · One Pungctual
         </footer>
         <InstallPrompt />
         <script

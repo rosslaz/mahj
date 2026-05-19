@@ -1,8 +1,8 @@
 {
   "id": "/?source=pwa",
-  "name": "Mahjong League",
-  "short_name": "Mahjong",
-  "description": "Track game nights, scores and standings for your mahjong league.",
+  "name": "Pungctual",
+  "short_name": "Pungctual",
+  "description": "Run mahjong clubs — leagues, tournaments, classes, open play.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

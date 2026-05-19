@@ -113,7 +113,7 @@ export default function InstallPrompt() {
             <span className="font-display text-2xl text-jade font-semibold">發</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-display text-lg leading-tight">Install Mahjong League</div>
+            <div className="font-display text-lg leading-tight">Install Pungctual</div>
             {showIOSHint ? (
               <p className="text-xs text-ink/60 italic mt-1 leading-snug">
                 Tap the Share button, then "Add to Home Screen" for a full-screen app experience.
