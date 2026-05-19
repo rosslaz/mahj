@@ -43,15 +43,17 @@ export function statusChipClass(tone: 'warn' | 'go' | 'ready' | 'over'): string 
 }
 
 export function NextEventCard({
-  slug,
   night,
+  eventBasePath,           // required: e.g. `/c/lazar/a/league/events`
   personalStatus = { kind: 'none' },
   leagueName,
 }: {
-  slug: string;
   night: NextEventNight;
+  eventBasePath: string;
   personalStatus?: PersonalStatus;
-  leagueName?: string;          // optional eyebrow — used when shown across leagues
+  leagueName?: string;          // optional eyebrow — used when shown across activities
+  // legacy: leave `slug` accepted but unused so old call-sites don't error
+  slug?: string;
 }) {
   const status = nightStatusBadge(night);
 
@@ -66,7 +68,7 @@ export function NextEventCard({
 
   return (
     <Link
-      href={`/l/${slug}/game-nights/${night.id}`}
+      href={`${eventBasePath}/${night.id}`}
       className="block tile-border p-8 md:p-10 hover:border-cinnabar/40 transition-colors fade-up"
     >
       {leagueName && (
@@ -105,24 +107,24 @@ export function NextEventCard({
   );
 }
 
-// Smaller "upcoming" card. Use for the second-tier listings.
 export function UpcomingCard({
-  slug,
   night,
+  eventBasePath,
   index = 0,
   leagueName,
   personalStatus = { kind: 'none' },
 }: {
-  slug: string;
   night: NextEventNight;
+  eventBasePath: string;
   index?: number;
   leagueName?: string;
   personalStatus?: PersonalStatus;
+  slug?: string; // legacy, unused
 }) {
   const status = nightStatusBadge(night);
   return (
     <Link
-      href={`/l/${slug}/game-nights/${night.id}`}
+      href={`${eventBasePath}/${night.id}`}
       className="tile-border p-5 hover:border-cinnabar/40 transition-colors fade-up flex flex-col"
       style={{ animationDelay: `${index * 0.04}s` }}
     >

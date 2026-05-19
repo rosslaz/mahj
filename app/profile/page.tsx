@@ -193,7 +193,7 @@ function ProfilePageInner() {
         <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mt-4 mb-3">Your Information</p>
         <h1 className="font-display text-5xl md:text-6xl">Profile</h1>
         <p className="mt-3 text-ink/60 italic">
-          Your details are shared with the leagues you join.
+          Your details are shared with the clubs you join.
         </p>
       </header>
 
@@ -201,7 +201,7 @@ function ProfilePageInner() {
         <div className="border border-jade/30 bg-jade/5 p-5 text-sm">
           <p className="font-display text-xl mb-1">Welcome.</p>
           <p className="text-ink/70">
-            Set your name and any optional details below, then head to <Link href="/leagues" className="underline hover:text-cinnabar">My Leagues</Link> to create or join a league.
+            Set your name and any optional details below, then head to <Link href="/clubs" className="underline hover:text-cinnabar">My Clubs</Link> to create or join a club.
           </p>
         </div>
       )}

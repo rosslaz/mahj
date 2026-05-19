@@ -43,8 +43,8 @@ export default function UserMenu() {
             <Link href="/" onClick={() => setOpen(false)} className="block px-4 py-3 text-sm hover:bg-ink/5 border-b border-ink/10">
               Dashboard
             </Link>
-            <Link href="/leagues" onClick={() => setOpen(false)} className="block px-4 py-3 text-sm hover:bg-ink/5 border-b border-ink/10">
-              My Leagues
+            <Link href="/clubs" onClick={() => setOpen(false)} className="block px-4 py-3 text-sm hover:bg-ink/5 border-b border-ink/10">
+              My Clubs
             </Link>
             <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-3 text-sm hover:bg-ink/5 border-b border-ink/10">
               My Profile

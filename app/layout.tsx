@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </Link>
             <div className="flex items-center gap-6 text-sm">
-              <Link href="/leagues" className="hidden sm:inline hover:text-cinnabar transition-colors">My Leagues</Link>
+              <Link href="/clubs" className="hidden sm:inline hover:text-cinnabar transition-colors">My Clubs</Link>
               <UserMenu />
             </div>
           </div>
