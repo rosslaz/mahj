@@ -1079,6 +1079,9 @@ function CalendarInviteModal({
   const [sendMode, setSendMode] = useState<'all' | 'remaining'>('remaining');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<null | { ok: boolean; message: string }>(null);
+  // Set once a send fully succeeded — locks the send button and starts the
+  // auto-close timer.
+  const [fullySucceeded, setFullySucceeded] = useState(false);
 
   const remaining = recipients.filter((r) => !r.invitedAt);
   const alreadyInvited = recipients.filter((r) => r.invitedAt);
@@ -1088,6 +1091,17 @@ function CalendarInviteModal({
   useEffect(() => {
     if (remaining.length === 0) setSendMode('all');
   }, [remaining.length]);
+
+  // After a fully-successful send, give the user ~1.5s to read the
+  // confirmation, then close the modal. (Partial failures keep the modal
+  // open so the host can see what didn't work.)
+  useEffect(() => {
+    if (!fullySucceeded) return;
+    const t = setTimeout(() => {
+      onClose();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [fullySucceeded, onClose]);
 
   const recipientsForThisSend =
     sendMode === 'remaining' ? remaining : recipients;
@@ -1106,10 +1120,16 @@ function CalendarInviteModal({
       if (!res.ok) {
         setResult({ ok: false, message: res.error });
       } else {
-        const parts = [`Sent to ${res.sentCount}.`];
+        const everyoneSent = res.failedCount === 0 && res.sentCount > 0;
+        const parts = [
+          everyoneSent
+            ? `Sent to ${res.sentCount} ✓`
+            : `Sent to ${res.sentCount}.`,
+        ];
         if (res.failedCount > 0) parts.push(`${res.failedCount} failed.`);
-        setResult({ ok: res.failedCount === 0, message: parts.join(' ') });
+        setResult({ ok: everyoneSent, message: parts.join(' ') });
         if (res.sentCount > 0) onSent();
+        if (everyoneSent) setFullySucceeded(true);
       }
     } catch (e: any) {
       setResult({ ok: false, message: e.message || 'Send failed.' });
@@ -1208,13 +1228,15 @@ function CalendarInviteModal({
           <button
             onClick={handleSend}
             className="btn btn-jade flex-1 justify-center"
-            disabled={sending || recipientsForThisSend.length === 0}
+            disabled={sending || fullySucceeded || recipientsForThisSend.length === 0}
           >
             {sending
               ? 'Sending…'
-              : recipientsForThisSend.length === 0
-                ? 'Nothing to send'
-                : `Send to ${recipientsForThisSend.length}`}
+              : fullySucceeded
+                ? 'Sent ✓'
+                : recipientsForThisSend.length === 0
+                  ? 'Nothing to send'
+                  : `Send to ${recipientsForThisSend.length}`}
           </button>
           <a
             href={downloadUrl}
