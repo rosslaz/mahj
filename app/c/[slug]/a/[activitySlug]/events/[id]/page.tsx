@@ -33,7 +33,7 @@ type Member = {
   state: string | null;
   zip: string | null;
 };
-type Signup = { id: string; player_id: string; status: 'approved' | 'pending'; created_at?: string };
+type Signup = { id: string; player_id: string; status: 'approved' | 'pending'; created_at?: string; invited_at?: string | null };
 type Table = { id: string; table_number: number; assigned: boolean };
 type Seat = { id: string; table_id: string; player_id: string; wind: Wind | null };
 type Game = { id: string; table_id: string; game_number: number; status: string };
@@ -65,6 +65,7 @@ export default function EventDetailPage() {
   const [activeGame, setActiveGame] = useState<{ tableId: string; gameId: string } | null>(null);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState<{ seatId: string; tableId: string } | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const load = useCallback(async () => {
     if (!cb.club) return;
@@ -73,7 +74,7 @@ export default function EventDetailPage() {
     const [nightRes, tablesRes, signupsRes, membersRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).eq('club_id', cb.club.id).single(),
       supabase.from('tables').select('*').eq('event_id', id).order('table_number'),
-      supabase.from('night_signups').select('id, player_id, status, created_at').eq('event_id', id),
+      supabase.from('night_signups').select('id, player_id, status, created_at, invited_at').eq('event_id', id),
       supabase.from('club_members')
         .select('user_id, user:user_id(name, street, city, state, zip, deleted_at)')
         .eq('club_id', cb.club.id),
@@ -489,6 +490,11 @@ export default function EventDetailPage() {
             {canManage && (
               <button onClick={() => setShowAddPlayer(true)} className="btn btn-ghost text-xs">+ Add player</button>
             )}
+            {canManage && approvedSignups.length > 0 && (
+              <button onClick={() => setShowInviteModal(true)} className="btn btn-ghost text-xs">
+                Calendar invites
+              </button>
+            )}
           </div>
         </div>
 
@@ -607,6 +613,25 @@ export default function EventDetailPage() {
             );
           })}
         </div>
+      )}
+
+      {showInviteModal && (
+        <CalendarInviteModal
+          eventId={id}
+          eventName={night.name}
+          downloadUrl={`${eventBasePath}/${id}/invite.ics`}
+          recipients={approvedSignups.map((s) => {
+            const m = members.find((mm) => mm.user_id === s.player_id);
+            return {
+              signupId: s.id,
+              name: m?.name || '—',
+              email: '',  // we don't expose emails to the client UI
+              invitedAt: s.invited_at ?? null,
+            };
+          })}
+          onClose={() => setShowInviteModal(false)}
+          onSent={() => load()}
+        />
       )}
 
       {showAddPlayer && (
@@ -1023,6 +1048,189 @@ function ScoreEntryModal({
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+type InviteRecipient = {
+  signupId: string;
+  name: string;
+  email: string;
+  invitedAt: string | null;
+};
+
+function CalendarInviteModal({
+  eventId,
+  eventName,
+  downloadUrl,
+  recipients,
+  onClose,
+  onSent,
+}: {
+  eventId: string;
+  eventName: string;
+  downloadUrl: string;
+  recipients: InviteRecipient[];
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [customMessage, setCustomMessage] = useState('');
+  const [sendMode, setSendMode] = useState<'all' | 'remaining'>('remaining');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<null | { ok: boolean; message: string }>(null);
+
+  const remaining = recipients.filter((r) => !r.invitedAt);
+  const alreadyInvited = recipients.filter((r) => r.invitedAt);
+
+  // If there's nobody remaining (everyone has been invited), default to "all"
+  // so the host's only option does something useful (resend).
+  useEffect(() => {
+    if (remaining.length === 0) setSendMode('all');
+  }, [remaining.length]);
+
+  const recipientsForThisSend =
+    sendMode === 'remaining' ? remaining : recipients;
+
+  async function handleSend() {
+    setSending(true);
+    setResult(null);
+    try {
+      // Dynamic import so the server action ships only when needed
+      const { sendCalendarInvites } = await import('@/app/actions/send-invites');
+      const res = await sendCalendarInvites({
+        eventId,
+        customMessage: customMessage.trim() || undefined,
+        onlySignupIds: sendMode === 'remaining' ? remaining.map((r) => r.signupId) : undefined,
+      });
+      if (!res.ok) {
+        setResult({ ok: false, message: res.error });
+      } else {
+        const parts = [`Sent to ${res.sentCount}.`];
+        if (res.failedCount > 0) parts.push(`${res.failedCount} failed.`);
+        setResult({ ok: res.failedCount === 0, message: parts.join(' ') });
+        if (res.sentCount > 0) onSent();
+      }
+    } catch (e: any) {
+      setResult({ ok: false, message: e.message || 'Send failed.' });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 fade-up">
+      <div className="bg-bone tile-border w-full max-w-xl p-7 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-baseline justify-between mb-2">
+          <h3 className="font-display text-3xl">Calendar Invites</h3>
+          <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
+        </div>
+        <p className="text-sm text-ink/50 italic mb-6">
+          Send an email + .ics file to approved players for <em>{eventName}</em>.
+        </p>
+
+        {/* Recipient status summary */}
+        <div className="border-b border-ink/10 pb-4 mb-5 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-xs tracking-[0.15em] uppercase text-ink/40 mb-1">Approved players</div>
+            <div className="font-display text-2xl">{recipients.length}</div>
+          </div>
+          <div>
+            <div className="text-xs tracking-[0.15em] uppercase text-ink/40 mb-1">Not yet invited</div>
+            <div className={`font-display text-2xl ${remaining.length > 0 ? 'text-cinnabar' : ''}`}>{remaining.length}</div>
+          </div>
+        </div>
+
+        {alreadyInvited.length > 0 && (
+          <details className="mb-4 text-sm">
+            <summary className="text-xs tracking-[0.2em] uppercase text-ink/40 cursor-pointer hover:text-ink">
+              {alreadyInvited.length} already invited
+            </summary>
+            <ul className="mt-2 pl-4 text-ink/60 space-y-0.5">
+              {alreadyInvited.map((r) => (
+                <li key={r.signupId} className="flex items-baseline justify-between gap-3">
+                  <span>{r.name}</span>
+                  <span className="text-[10px] tracking-[0.15em] uppercase text-ink/40">
+                    {new Date(r.invitedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        {/* Send-mode selector — only shown if both options would do something */}
+        {remaining.length > 0 && alreadyInvited.length > 0 && (
+          <div className="mb-5 flex flex-col gap-2">
+            <label className="flex items-baseline gap-2 cursor-pointer">
+              <input
+                type="radio"
+                checked={sendMode === 'remaining'}
+                onChange={() => setSendMode('remaining')}
+                className="accent-jade"
+              />
+              <span className="text-sm">
+                Send to {remaining.length} not yet invited
+              </span>
+            </label>
+            <label className="flex items-baseline gap-2 cursor-pointer">
+              <input
+                type="radio"
+                checked={sendMode === 'all'}
+                onChange={() => setSendMode('all')}
+                className="accent-jade"
+              />
+              <span className="text-sm">
+                Resend to all {recipients.length} (calendar entries will update)
+              </span>
+            </label>
+          </div>
+        )}
+
+        <div className="mb-5">
+          <label className="label">Optional message <span className="text-ink/30 normal-case tracking-normal italic font-normal">— shown in the email body</span></label>
+          <textarea
+            className="input min-h-[80px] resize-y"
+            value={customMessage}
+            onChange={(e) => setCustomMessage(e.target.value)}
+            placeholder="Bring an extra deck. Parking is free on the street."
+            rows={3}
+          />
+        </div>
+
+        {result && (
+          <div className={`p-3 text-sm mb-4 border ${result.ok ? 'border-jade/40 bg-jade/5 text-ink' : 'border-cinnabar/40 bg-cinnabar/5 text-cinnabar'}`}>
+            {result.message}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            onClick={handleSend}
+            className="btn btn-jade flex-1 justify-center"
+            disabled={sending || recipientsForThisSend.length === 0}
+          >
+            {sending
+              ? 'Sending…'
+              : recipientsForThisSend.length === 0
+                ? 'Nothing to send'
+                : `Send to ${recipientsForThisSend.length}`}
+          </button>
+          <a
+            href={downloadUrl}
+            className="btn btn-ghost"
+            download
+          >
+            Download .ics
+          </a>
+          <button onClick={onClose} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar ml-auto">
+            Close
+          </button>
+        </div>
+
+        <p className="text-xs text-ink/40 italic mt-4 leading-snug">
+          Recipients will get an email with a calendar invite attached. Replies route directly to the host. Resending updates each recipient's calendar entry rather than creating duplicates.
+        </p>
       </div>
     </div>
   );
