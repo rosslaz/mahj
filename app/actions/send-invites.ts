@@ -1,7 +1,7 @@
 'use server';
 
 import { getSupabase } from '@/lib/supabase';
-import { buildICalendar, combineDateTime, type ICalAttendee } from '@/lib/ics';
+import { buildICalendar, parseLocalDateTime, addLocalHours, type ICalAttendee } from '@/lib/ics';
 import { formatAddressLines } from '@/lib/address';
 
 // Resend's SMTP-via-HTTP-API endpoint. Using the REST API directly avoids
@@ -106,9 +106,14 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
   // Increment SEQUENCE so calendar clients update existing events
   const newSequence = ((eventData as any).invite_sequence ?? 0) + 1;
 
-  const start = combineDateTime((eventData as any).date, (eventData as any).start_time);
-  // Default duration: 3 hours. Most game nights run 2-4 hours.
-  const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+  let start: Date;
+  let end: Date;
+  try {
+    start = parseLocalDateTime((eventData as any).date, (eventData as any).start_time);
+    end = addLocalHours(start, 3);  // default 3-hour duration
+  } catch (e: any) {
+    return { ok: false, error: `Invalid event date/time: ${e.message}` };
+  }
 
   const addressLines = formatAddressLines(eventData as any);
   const location = addressLines.join(', ');
@@ -140,8 +145,8 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
     summary,
     description,
     location,
-    startUtc: start,
-    endUtc: end,
+    startLocal: start,
+    endLocal: end,
     organizer,
     attendees: allAttendees,
     method: 'REQUEST',

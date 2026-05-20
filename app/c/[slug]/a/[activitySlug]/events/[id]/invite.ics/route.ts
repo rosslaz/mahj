@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
-import { buildICalendar, combineDateTime } from '@/lib/ics';
+import { buildICalendar, parseLocalDateTime, addLocalHours } from '@/lib/ics';
 import { formatAddressLines } from '@/lib/address';
 
 // GET /c/[slug]/a/[activitySlug]/events/[id]/invite.ics
@@ -49,8 +49,14 @@ export async function GET(
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://pungctual.com';
-  const start = combineDateTime((eventData as any).date, (eventData as any).start_time);
-  const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+  let start: Date;
+  let end: Date;
+  try {
+    start = parseLocalDateTime((eventData as any).date, (eventData as any).start_time);
+    end = addLocalHours(start, 3);
+  } catch (e: any) {
+    return new NextResponse(`Invalid event date/time: ${e.message}`, { status: 500 });
+  }
   const location = formatAddressLines(eventData as any).join(', ');
   const url = `${appUrl}/c/${(eventData as any).club.slug}/a/${(eventData as any).activity.slug}/events/${context.params.id}`;
 
@@ -65,8 +71,8 @@ export async function GET(
     summary: `${(eventData as any).name} (${(eventData as any).activity.name})`,
     description: `View on Pungctual: ${url}`,
     location,
-    startUtc: start,
-    endUtc: end,
+    startLocal: start,
+    endLocal: end,
     organizer: host ? { email: host.email, name: host.name } : undefined,
     method: 'PUBLISH',
     url,
