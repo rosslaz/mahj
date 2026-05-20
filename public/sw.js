@@ -17,15 +17,15 @@
  * fresh cache so users don't get pinned to old HTML forever.
  */
 
-const CACHE_VERSION = 'v4-2026-05-19';     // bump on every deploy
+const CACHE_VERSION = 'v5-2026-05-19-rebrand';     // bump on every deploy
 const STATIC_CACHE = `pungctual-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `pungctual-runtime-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   '/manifest.json',
-  '/icon.svg',
   '/icon-192.png',
   '/icon-512.png',
+  '/pungctual-logo.png',
   '/mahjong-bg.png',
 ];
 

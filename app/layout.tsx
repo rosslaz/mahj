@@ -1,12 +1,13 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'Pungctual',
-  description: 'Track game nights, scores and standings for your mahjong league.',
+  description: 'Run mahjong clubs — leagues, tournaments, classes, open play.',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Pungctual' },
   icons: { icon: '/icon.svg', apple: '/icon.svg' },
@@ -33,14 +34,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="border-b border-ink/15">
           <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-12 bg-bone tile-border flex items-center justify-center">
-                <span className="font-display text-2xl text-jade font-semibold">發</span>
-              </div>
-              <div>
-                <div className="font-display text-2xl leading-none tracking-tight">Pungctual</div>
-                <div className="text-[10px] tracking-[0.3em] uppercase text-ink/50 mt-1">mahjong, on time</div>
-              </div>
+            <Link href="/" className="flex items-center group" aria-label="Pungctual home">
+              <Image
+                src="/pungctual-logo.png"
+                alt="Pungctual — mahjong scheduling"
+                width={300}
+                height={129}
+                priority
+                className="h-12 md:h-14 w-auto"
+              />
             </Link>
             <div className="flex items-center gap-6 text-sm">
               <Link href="/clubs" className="hidden sm:inline hover:text-cinnabar transition-colors">My Clubs</Link>

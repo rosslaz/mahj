@@ -109,9 +109,11 @@ export default function InstallPrompt() {
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 md:max-w-sm z-40 fade-up">
       <div className="tile-border bg-bone p-4 shadow-lg">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-12 bg-ink flex items-center justify-center flex-shrink-0">
-            <span className="font-display text-2xl text-jade font-semibold">發</span>
-          </div>
+          <img
+            src="/icon-192.png"
+            alt=""
+            className="w-12 h-12 flex-shrink-0 rounded"
+          />
           <div className="flex-1 min-w-0">
             <div className="font-display text-lg leading-tight">Install Pungctual</div>
             {showIOSHint ? (
