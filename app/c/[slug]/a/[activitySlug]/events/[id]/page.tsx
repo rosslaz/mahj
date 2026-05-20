@@ -66,6 +66,9 @@ export default function EventDetailPage() {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState<{ seatId: string; tableId: string } | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  // Transient toast shown briefly after a successful invite send. Lives on
+  // the page (not in the modal) so it persists across the modal's unmount.
+  const [inviteToast, setInviteToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!cb.club) return;
@@ -136,6 +139,13 @@ export default function EventDetailPage() {
   }, [id, supabase, cb.club]);
 
   useEffect(() => { if (cb.club) load(); }, [cb.club, load]);
+
+  // Clear the invite-success toast after a few seconds
+  useEffect(() => {
+    if (!inviteToast) return;
+    const t = setTimeout(() => setInviteToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [inviteToast]);
 
   if (cb.loading || !cb.club) return null;
   if (loading) return <p className="text-ink/40 italic">Loading game night…</p>;
@@ -418,6 +428,11 @@ export default function EventDetailPage() {
 
   return (
     <div className="space-y-12">
+      {inviteToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-jade text-bone px-5 py-3 shadow-lg border border-jade text-sm tracking-[0.05em] fade-up">
+          {inviteToast}
+        </div>
+      )}
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <Link href={eventBasePath} className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">
@@ -620,17 +635,29 @@ export default function EventDetailPage() {
           eventId={id}
           eventName={night.name}
           downloadUrl={`${eventBasePath}/${id}/invite.ics`}
-          recipients={approvedSignups.map((s) => {
-            const m = members.find((mm) => mm.user_id === s.player_id);
-            return {
-              signupId: s.id,
-              name: m?.name || '—',
-              email: '',  // we don't expose emails to the client UI
-              invitedAt: s.invited_at ?? null,
-            };
-          })}
+          recipients={approvedSignups
+            // Exclude the host themselves — they organize the event and
+            // shouldn't receive a self-invite. (Gmail refuses to render
+            // when ORGANIZER == ATTENDEE == recipient.)
+            .filter((s) => s.player_id !== night.host_player_id)
+            .map((s) => {
+              const m = members.find((mm) => mm.user_id === s.player_id);
+              return {
+                signupId: s.id,
+                name: m?.name || '—',
+                email: '',  // we don't expose emails to the client UI
+                invitedAt: s.invited_at ?? null,
+              };
+            })}
           onClose={() => setShowInviteModal(false)}
-          onSent={() => load()}
+          onSuccess={(sentCount) => {
+            // Close immediately on success — load() below would otherwise
+            // unmount the modal anyway. Show a toast on the page so the user
+            // gets the confirmation after the page settles.
+            setShowInviteModal(false);
+            setInviteToast(`Calendar invites sent to ${sentCount} ✓`);
+            load();
+          }}
         />
       )}
 
@@ -1066,22 +1093,22 @@ function CalendarInviteModal({
   downloadUrl,
   recipients,
   onClose,
-  onSent,
+  onSuccess,
 }: {
   eventId: string;
   eventName: string;
   downloadUrl: string;
   recipients: InviteRecipient[];
   onClose: () => void;
-  onSent: () => void;
+  /** Called on fully successful send with the sent count. The parent should
+   * close the modal and refresh data. Modal will NOT call onClose itself in
+   * this case. */
+  onSuccess: (sentCount: number) => void;
 }) {
   const [customMessage, setCustomMessage] = useState('');
   const [sendMode, setSendMode] = useState<'all' | 'remaining'>('remaining');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<null | { ok: boolean; message: string }>(null);
-  // Set once a send fully succeeded — locks the send button and starts the
-  // auto-close timer.
-  const [fullySucceeded, setFullySucceeded] = useState(false);
 
   const remaining = recipients.filter((r) => !r.invitedAt);
   const alreadyInvited = recipients.filter((r) => r.invitedAt);
@@ -1091,17 +1118,6 @@ function CalendarInviteModal({
   useEffect(() => {
     if (remaining.length === 0) setSendMode('all');
   }, [remaining.length]);
-
-  // After a fully-successful send, give the user ~1.5s to read the
-  // confirmation, then close the modal. (Partial failures keep the modal
-  // open so the host can see what didn't work.)
-  useEffect(() => {
-    if (!fullySucceeded) return;
-    const t = setTimeout(() => {
-      onClose();
-    }, 1500);
-    return () => clearTimeout(t);
-  }, [fullySucceeded, onClose]);
 
   const recipientsForThisSend =
     sendMode === 'remaining' ? remaining : recipients;
@@ -1128,8 +1144,14 @@ function CalendarInviteModal({
         ];
         if (res.failedCount > 0) parts.push(`${res.failedCount} failed.`);
         setResult({ ok: everyoneSent, message: parts.join(' ') });
-        if (res.sentCount > 0) onSent();
-        if (everyoneSent) setFullySucceeded(true);
+        if (everyoneSent) {
+          // Parent handles closing the modal + showing toast + refreshing
+          // data. Don't update local state here — the modal is about to
+          // unmount anyway.
+          onSuccess(res.sentCount);
+        }
+        // For partial failures (some sent, some failed), stay open with the
+        // result message so the host can see what happened.
       }
     } catch (e: any) {
       setResult({ ok: false, message: e.message || 'Send failed.' });
@@ -1228,15 +1250,13 @@ function CalendarInviteModal({
           <button
             onClick={handleSend}
             className="btn btn-jade flex-1 justify-center"
-            disabled={sending || fullySucceeded || recipientsForThisSend.length === 0}
+            disabled={sending || recipientsForThisSend.length === 0}
           >
             {sending
               ? 'Sending…'
-              : fullySucceeded
-                ? 'Sent ✓'
-                : recipientsForThisSend.length === 0
-                  ? 'Nothing to send'
-                  : `Send to ${recipientsForThisSend.length}`}
+              : recipientsForThisSend.length === 0
+                ? 'Nothing to send'
+                : `Send to ${recipientsForThisSend.length}`}
           </button>
           <a
             href={downloadUrl}

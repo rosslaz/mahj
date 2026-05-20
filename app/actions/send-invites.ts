@@ -88,6 +88,9 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
   const { data: signupRows, error: suErr } = await signupQuery;
   if (suErr) return { ok: false, error: `Could not load attendees: ${suErr.message}` };
 
+  const hostPlayerId = (eventData as any).host_player_id as string | null;
+  const hostEmailLower = ((eventData as any).host?.email as string | undefined)?.toLowerCase();
+
   const recipients = ((signupRows as any[]) || [])
     .map((s) => ({
       signupId: s.id,
@@ -96,10 +99,19 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
       email: s.user?.email as string,
       invitedAt: s.invited_at as string | null,
     }))
-    .filter((r) => r.name && r.email);
+    .filter((r) => r.name && r.email)
+    // Exclude the host from the invite — they're the organizer/sender.
+    // Self-invites (organizer == attendee == recipient) cause Gmail to
+    // refuse to render the event card. Match by player_id first; fall
+    // back to email comparison in case a host hasn't been resolved by ID.
+    .filter((r) => {
+      if (hostPlayerId && r.playerId === hostPlayerId) return false;
+      if (hostEmailLower && r.email.toLowerCase() === hostEmailLower) return false;
+      return true;
+    });
 
   if (recipients.length === 0) {
-    return { ok: false, error: 'No approved attendees to invite.' };
+    return { ok: false, error: 'No approved attendees to invite (excluding the host).' };
   }
 
   // ---- BUILD THE .ICS ----
