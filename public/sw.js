@@ -17,7 +17,7 @@
  * fresh cache so users don't get pinned to old HTML forever.
  */
 
-const CACHE_VERSION = 'v5-2026-05-19-rebrand';     // bump on every deploy
+const CACHE_VERSION = 'v6-2026-05-20-push';     // bump on every deploy
 const STATIC_CACHE = `pungctual-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `pungctual-runtime-${CACHE_VERSION}`;
 
@@ -147,3 +147,99 @@ const OFFLINE_HTML = `<!doctype html>
   </main>
 </body>
 </html>`;
+
+// ============================================================
+// Push notifications
+//
+// The server sends a push to the user's subscription endpoint with an
+// encrypted JSON payload. The push service wakes the SW and fires the
+// 'push' event, where we extract the payload and call showNotification().
+//
+// Payload shape (we control this from our server):
+//   {
+//     title: "Sarah signed up",
+//     body: "Tuesday Night League — Night 4",
+//     url: "/c/test-club/a/tuesday/events/<uuid>",
+//     tag: "signup-<eventId>",   // groups related notifications
+//     silent: false              // honors user's sound prefs server-side
+//   }
+//
+// 'notificationclick' opens (or focuses) the app at the URL.
+// ============================================================
+
+self.addEventListener('push', (event) => {
+  // No payload = nothing to show. Some browsers send empty pushes as a
+  // background-sync ping; we just ignore them.
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    // Fallback if the server somehow sent plain text
+    payload = { title: 'Pungctual', body: event.data.text() };
+  }
+
+  const title = payload.title || 'Pungctual';
+  const options = {
+    body: payload.body || '',
+    // The icon shown in the notification. /icon-192.png is our PWA icon.
+    icon: '/icon-192.png',
+    // Small monochrome badge for Android status bar. We don't have a
+    // dedicated monochrome icon yet; reuse icon-192 (Android will tint it).
+    badge: '/icon-192.png',
+    // tag = stacking key. Notifications with the same tag replace each other
+    // instead of accumulating. Server sets this to group e.g. signup-<eventId>
+    // so "5 people signed up" doesn't produce 5 separate alerts.
+    tag: payload.tag,
+    data: { url: payload.url || '/' },
+    // Default to whatever the OS says. If the server flags silent: true
+    // (because the user disabled sound in prefs), we suppress the alert tone.
+    silent: payload.silent === true,
+    // requireInteraction would keep the notification until clicked. We don't
+    // want that — even reminders should auto-dismiss.
+    requireInteraction: false,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
+  // Try to focus an existing tab on our origin. If one is open, navigate it
+  // to the target URL and focus. Otherwise open a new window.
+  event.waitUntil((async () => {
+    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of allClients) {
+      // Find a client that's already on our origin
+      try {
+        const clientUrl = new URL(client.url);
+        const target = new URL(targetUrl, self.location.origin);
+        if (clientUrl.origin === target.origin) {
+          await client.focus();
+          // Navigate to the target URL (in case they're on a different page)
+          if ('navigate' in client) {
+            try { await client.navigate(target.href); } catch { /* navigation blocked, ignore */ }
+          }
+          return;
+        }
+      } catch { /* ignore malformed URLs */ }
+    }
+    // No existing window — open a fresh one
+    if (self.clients.openWindow) {
+      await self.clients.openWindow(targetUrl);
+    }
+  })());
+});
+
+// Handle subscription expirations. The browser may rotate the user's push
+// subscription (e.g. Chrome does this periodically). We re-subscribe and
+// the client will pick up the new sub on next page load.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  // No-op for now — full re-subscribe flow happens client-side. We'd want
+  // to call back into our server with the new sub here for full robustness,
+  // but pushsubscriptionchange has limited browser support. Easier to detect
+  // stale subs server-side (failed push → mark sub for cleanup).
+});

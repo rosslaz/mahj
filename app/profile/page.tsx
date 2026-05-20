@@ -7,6 +7,7 @@ import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
+import NotificationsPanel from '@/components/NotificationsPanel';
 
 type UserRow = {
   id: string;
@@ -262,6 +263,7 @@ function ProfilePageInner() {
           )}
         </div>
       </form>
+      <NotificationsPanel />
     </div>
   );
 }
