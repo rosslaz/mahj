@@ -1,16 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 
+// Two-phase sign-in:
+//   Phase 1 (email): user enters email; we call signInWithOtp which sends
+//     an email containing BOTH a magic link AND a 6-digit code.
+//   Phase 2 (verify): we show the "check email" confirmation, plus a
+//     collapsible "enter code instead" form. The link is preferred — but
+//     if the user is on a device where it would open in the wrong browser
+//     (default-browser ≠ app browser, PWA-from-Safari-default, etc.),
+//     they can type the 6-digit code from the email instead and complete
+//     auth in this exact session.
+
+type Phase = 'email' | 'sent';
+
 export default function SignInPage() {
+  const router = useRouter();
+  const [phase, setPhase] = useState<Phase>('email');
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function send(e: React.FormEvent) {
+  // The code-entry UI is off by default — magic link is the primary path.
+  // Some users will just use the link and never see this.
+  const [showCodeForm, setShowCodeForm] = useState(false);
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showCodeForm) codeInputRef.current?.focus();
+  }, [showCodeForm]);
+
+  async function sendLink(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
@@ -21,8 +47,41 @@ export default function SignInPage() {
       options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
     });
     if (error) setError(error.message);
-    else setSent(true);
+    else setPhase('sent');
     setBusy(false);
+  }
+
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setVerifying(true);
+    setVerifyError(null);
+    const supabase = getBrowserSupabase();
+    // Strip spaces/dashes — users sometimes type "123 456" or "123-456"
+    const cleanCode = code.replace(/\s|-/g, '');
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: cleanCode,
+      type: 'email',
+    });
+    if (error) {
+      setVerifyError(error.message);
+      setVerifying(false);
+      return;
+    }
+    if (!data.session) {
+      setVerifyError('Verification did not produce a session. Try again.');
+      setVerifying(false);
+      return;
+    }
+    // We're now authenticated. /auth/callback creates the users row for
+    // new signups and redirects to /profile?welcome=1 — but it expects a
+    // ?code=... query and runs server-side. Since we verified client-side
+    // and have a session, we go straight to the post-sign-in landing.
+    // The users row will be created by our existing handling in /auth/callback
+    // or on first /profile load. To be safe, navigate via the callback
+    // route which has the new-user-row creation logic. Pass next=/ so it
+    // lands on home rather than the welcome flow if the user already exists.
+    router.push('/auth/callback?from=otp');
   }
 
   return (
@@ -33,17 +92,8 @@ export default function SignInPage() {
         <p className="mt-3 text-ink/60 italic font-display">Or create an account. A link will arrive in your inbox.</p>
       </header>
 
-      {sent ? (
-        <div className="tile-border p-7 space-y-4">
-          <h2 className="font-display text-2xl">Check your email</h2>
-          <p className="text-sm text-ink/70">
-            We sent a sign-in link to <strong>{email}</strong>. Click it on this device to continue.
-          </p>
-          <p className="text-xs text-ink/40 italic">If it doesn't appear in a minute, check spam.</p>
-          <Link href="/" className="btn btn-ghost">← Home</Link>
-        </div>
-      ) : (
-        <form onSubmit={send} className="tile-border p-7 space-y-5">
+      {phase === 'email' && (
+        <form onSubmit={sendLink} className="tile-border p-7 space-y-5">
           <div>
             <label className="label">Email</label>
             <input
@@ -56,14 +106,96 @@ export default function SignInPage() {
               required
             />
             <p className="mt-2 text-xs text-ink/40 italic">
-              New here? Just enter your email — we'll create your account when you click the link.
+              New here? Just enter your email — we'll create your account when you sign in.
             </p>
           </div>
           {error && <p className="text-cinnabar text-sm">{error}</p>}
           <button className="btn btn-jade w-full justify-center" disabled={busy}>
-            {busy ? 'Sending…' : 'Send Magic Link'}
+            {busy ? 'Sending…' : 'Send Sign-In Email'}
           </button>
         </form>
+      )}
+
+      {phase === 'sent' && (
+        <div className="space-y-5">
+          <div className="tile-border p-7 space-y-3">
+            <h2 className="font-display text-2xl">Check your email</h2>
+            <p className="text-sm text-ink/70">
+              We sent a sign-in email to <strong>{email}</strong>.
+            </p>
+            <p className="text-sm text-ink/70">
+              Click the magic link in the email <strong>on this same browser</strong>, and you'll be signed in.
+            </p>
+            <p className="text-xs text-ink/40 italic">
+              If it doesn't appear in a minute, check spam.
+            </p>
+          </div>
+
+          {/* OTP fallback. Off by default so it doesn't distract people who
+              just want to click the link. Shown when the link doesn't work
+              for them (cross-browser / PWA / different device cases). */}
+          {!showCodeForm ? (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowCodeForm(true)}
+                className="text-xs tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar"
+              >
+                Link not working? Enter code instead →
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={verifyCode} className="tile-border p-7 space-y-5">
+              <div>
+                <h3 className="font-display text-xl mb-1">Enter code</h3>
+                <p className="text-xs text-ink/50 italic">
+                  Your email also contains a 6-digit code. Type it below to sign in here.
+                </p>
+              </div>
+              <div>
+                <label className="label">6-digit code</label>
+                <input
+                  ref={codeInputRef}
+                  type="text"
+                  className="input text-center text-2xl tracking-[0.4em] font-mono"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={7}  // 6 digits, but allow a typed space
+                  placeholder="123456"
+                  required
+                />
+              </div>
+              {verifyError && <p className="text-cinnabar text-sm">{verifyError}</p>}
+              <div className="flex items-center gap-3">
+                <button className="btn btn-jade flex-1 justify-center" disabled={verifying || code.replace(/\s|-/g, '').length < 6}>
+                  {verifying ? 'Verifying…' : 'Verify & Sign In'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowCodeForm(false); setCode(''); setVerifyError(null); }}
+                  className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="text-xs text-ink/40 italic">
+                Same email, same code — use whichever way is easiest. The code expires after about an hour.
+              </p>
+            </form>
+          )}
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => { setPhase('email'); setShowCodeForm(false); setCode(''); setError(null); setVerifyError(null); }}
+              className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+            >
+              ← Use a different email
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

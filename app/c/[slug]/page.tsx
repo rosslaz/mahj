@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
 import { ACTIVITY_TYPE_LABEL, type ActivityType, activityHasScoring } from '@/lib/use-activity';
 import { NextEventCard, type NextEventNight, type PersonalStatus } from '@/components/NextEventCard';
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 type ActivityCard = {
   id: string;
@@ -38,90 +40,92 @@ export default function ClubOverview() {
   const [memberCount, setMemberCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!cb.club) return;
-    (async () => {
-      // Activities in this club
-      const { data: actData } = await supabase
-        .from('activities')
-        .select('id, slug, name, description, type, is_public, deleted_at')
-        .eq('club_id', cb.club!.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      const acts = ((actData as any[]) || []).map((a) => ({
-        id: a.id, slug: a.slug, name: a.name, description: a.description,
-        type: a.type as ActivityType, is_public: a.is_public,
-      }));
-      setActivities(acts);
+    // Activities in this club
+    const { data: actData } = await supabase
+      .from('activities')
+      .select('id, slug, name, description, type, is_public, deleted_at')
+      .eq('club_id', cb.club!.id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    const acts = ((actData as any[]) || []).map((a) => ({
+      id: a.id, slug: a.slug, name: a.name, description: a.description,
+      type: a.type as ActivityType, is_public: a.is_public,
+    }));
+    setActivities(acts);
 
-      // Next event across all activities in this club
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: gnData } = await supabase
-        .from('events')
-        .select('id, name, date, start_time, num_tables, games_planned, status, activity_id, host:host_player_id(id, name), tables(assigned)')
-        .eq('club_id', cb.club!.id)
-        .gte('date', today)
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true })
-        .limit(1);
+    // Next event across all activities in this club
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: gnData } = await supabase
+      .from('events')
+      .select('id, name, date, start_time, num_tables, games_planned, status, activity_id, host:host_player_id(id, name), tables(assigned)')
+      .eq('club_id', cb.club!.id)
+      .gte('date', today)
+      .eq('status', 'active')
+      .is('deleted_at', null)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(1);
 
-      let next: UpcomingEvent | null = null;
-      if (gnData && gnData.length > 0) {
-        const g: any = gnData[0];
-        const act = acts.find((a) => a.id === g.activity_id);
-        if (act) {
-          // Count approved signups for this event + look up the user's own status
-          const { data: signupData } = await supabase
-            .from('night_signups')
-            .select('player_id, status')
-            .eq('event_id', g.id);
-          const approvedCount = ((signupData as any[]) || []).filter((s) => s.status === 'approved').length;
-          let personal: PersonalStatus = { kind: 'none' };
-          if (auth.userId) {
-            if (g.host?.id === auth.userId) {
-              personal = { kind: 'hosting' };
-            } else {
-              const mine = ((signupData as any[]) || []).find((s) => s.player_id === auth.userId);
-              personal = mine && mine.status === 'approved' ? { kind: 'signed_up' } : { kind: 'not_signed_up' };
-            }
+    let next: UpcomingEvent | null = null;
+    if (gnData && gnData.length > 0) {
+      const g: any = gnData[0];
+      const act = acts.find((a) => a.id === g.activity_id);
+      if (act) {
+        // Count approved signups for this event + look up the user's own status
+        const { data: signupData } = await supabase
+          .from('night_signups')
+          .select('player_id, status')
+          .eq('event_id', g.id);
+        const approvedCount = ((signupData as any[]) || []).filter((s) => s.status === 'approved').length;
+        let personal: PersonalStatus = { kind: 'none' };
+        if (auth.userId) {
+          if (g.host?.id === auth.userId) {
+            personal = { kind: 'hosting' };
+          } else {
+            const mine = ((signupData as any[]) || []).find((s) => s.player_id === auth.userId);
+            personal = mine && mine.status === 'approved' ? { kind: 'signed_up' } : { kind: 'not_signed_up' };
           }
-          next = {
-            id: g.id,
-            name: g.name,
-            date: g.date,
-            start_time: g.start_time,
-            num_tables: g.num_tables,
-            games_planned: g.games_planned,
-            status: g.status,
-            host: g.host,
-            signup_count: approvedCount,
-            assigned: (g.tables || []).some((t: any) => t.assigned),
-            activity_id: g.activity_id,
-            activity_slug: act.slug,
-            activity_name: act.name,
-            activity_type: act.type,
-            personal,
-          };
         }
+        next = {
+          id: g.id,
+          name: g.name,
+          date: g.date,
+          start_time: g.start_time,
+          num_tables: g.num_tables,
+          games_planned: g.games_planned,
+          status: g.status,
+          host: g.host,
+          signup_count: approvedCount,
+          assigned: (g.tables || []).some((t: any) => t.assigned),
+          activity_id: g.activity_id,
+          activity_slug: act.slug,
+          activity_name: act.name,
+          activity_type: act.type,
+          personal,
+        };
       }
-      setNextEvent(next);
+    }
+    setNextEvent(next);
 
-      // Member count
-      const { count } = await supabase
-        .from('club_members')
-        .select('id', { count: 'exact', head: true })
-        .eq('club_id', cb.club!.id);
-      setMemberCount(count || 0);
+    // Member count
+    const { count } = await supabase
+      .from('club_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('club_id', cb.club!.id);
+    setMemberCount(count || 0);
 
-      setLoading(false);
-    })();
+    setLoading(false);
   }, [cb.club, auth.userId, supabase]);
+
+  useEffect(() => { load(); }, [load]);
+  useRefreshOnFocus(load, !!cb.club);
 
   if (!cb.club) return null;
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div className="space-y-12">
       {cb.club.description && (
         <p className="text-ink/70 italic text-base max-w-2xl -mt-2 leading-relaxed">
@@ -213,5 +217,6 @@ export default function ClubOverview() {
         </div>
       </section>
     </div>
+    </PullToRefresh>
   );
 }

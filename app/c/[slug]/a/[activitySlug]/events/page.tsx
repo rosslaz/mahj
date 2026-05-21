@@ -10,6 +10,8 @@ import { useActivity } from '@/lib/use-activity';
 import { formatTime12 } from '@/lib/game-utils';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 type Member = {
   user_id: string;
@@ -191,6 +193,7 @@ export default function ActivityEventsPage() {
   }
 
   useEffect(() => { if (cb.club && act.activity) load(); /* eslint-disable-next-line */ }, [cb.club, act.activity]);
+  useRefreshOnFocus(load, !!(cb.club && act.activity));
 
   function memberAddr(m: Member | undefined): AddressFieldsValue {
     if (!m) return EMPTY_ADDR;
@@ -370,6 +373,7 @@ export default function ActivityEventsPage() {
   const hostHasAddress = !!(selectedHost?.street || selectedHost?.city || selectedHost?.state || selectedHost?.zip);
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div className="space-y-10">
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
@@ -684,6 +688,7 @@ export default function ActivityEventsPage() {
         );
       })()}
     </div>
+    </PullToRefresh>
   );
 }
 

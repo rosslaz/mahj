@@ -9,6 +9,8 @@ import { useClub } from '@/lib/use-club';
 import { useActivity } from '@/lib/use-activity';
 import { shuffle, formatTime12, windForGame, assignPlayersToTables, WIND_LABEL, type Wind } from '@/lib/game-utils';
 import { formatAddressLines } from '@/lib/address';
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 type Night = {
   id: string;
@@ -139,6 +141,9 @@ export default function EventDetailPage() {
   }, [id, supabase, cb.club]);
 
   useEffect(() => { if (cb.club) load(); }, [cb.club, load]);
+  // Re-fetch on tab/PWA focus so the view picks up signups, score changes,
+  // and other concurrent edits without manual refresh.
+  useRefreshOnFocus(load, !!cb.club);
 
   // Clear the invite-success toast after a few seconds
   useEffect(() => {
@@ -427,12 +432,14 @@ export default function EventDetailPage() {
   const streetIsHidden = !canSeeStreet && !!night.street;
 
   return (
-    <div className="space-y-12">
+    <>
       {inviteToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-jade text-bone px-5 py-3 shadow-lg border border-jade text-sm tracking-[0.05em] fade-up">
           {inviteToast}
         </div>
       )}
+      <PullToRefresh onRefresh={load}>
+    <div className="space-y-12">
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <Link href={eventBasePath} className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">
@@ -691,6 +698,8 @@ export default function EventDetailPage() {
         />
       )}
     </div>
+      </PullToRefresh>
+    </>
   );
 }
 

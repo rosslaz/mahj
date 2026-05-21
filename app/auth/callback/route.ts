@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+// Handles post-sign-in routing for two entry paths:
+//   - Magic link: ?code=... — we exchange it for a session here.
+//   - OTP code (typed on sign-in page): ?from=otp — session was already
+//     established client-side by supabase.auth.verifyOtp. No code to
+//     exchange, just need to do the users-row provisioning.
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  const fromOtp = searchParams.get('from') === 'otp';
   const next = searchParams.get('next') ?? '/';
 
-  if (!code) {
+  // Neither path gave us anything to work with → bail to sign-in.
+  if (!code && !fromOtp) {
     return NextResponse.redirect(`${origin}/sign-in?error=callback`);
   }
 
@@ -24,19 +31,23 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeErr) {
-    return NextResponse.redirect(`${origin}/sign-in?error=callback`);
+  // Magic-link flow: exchange the code for a session.
+  if (code) {
+    const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+    if (exchangeErr) {
+      return NextResponse.redirect(`${origin}/sign-in?error=callback`);
+    }
   }
+  // OTP flow: session is already in cookies; no exchange needed.
 
-  // We now have a session. Ensure a users row exists.
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) {
-    return NextResponse.redirect(`${origin}${next}`);
+    // OTP flow without a valid session = something went wrong client-side.
+    return NextResponse.redirect(`${origin}/sign-in?error=no-session`);
   }
   const email = user.email.toLowerCase();
 
-  // Find by auth_user_id first, then by email
+  // Find the users row by auth_user_id, then by email
   let { data: existing } = await supabase
     .from('users')
     .select('id, name')
@@ -80,7 +91,6 @@ export async function GET(request: NextRequest) {
     needsProfile = false;
   }
 
-  // If brand new, route them to profile to set their name. Otherwise the requested `next`.
   const destination = needsProfile ? '/profile?welcome=1' : next;
   return NextResponse.redirect(`${origin}${destination}`);
 }

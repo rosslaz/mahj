@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
@@ -11,6 +11,8 @@ import {
   type PersonalStatus,
 } from '@/components/NextEventCard';
 import { ACTIVITY_TYPE_LABEL, type ActivityType, activityHasScoring } from '@/lib/use-activity';
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 type ClubCard = {
   id: string;
@@ -53,13 +55,12 @@ export default function HomePage() {
   const [stats, setStats] = useState<LifetimeStats>({ games_played: 0, total_wins: 0, total_points: 0 });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (auth.loading) return;
     if (!auth.userId) { setLoading(false); return; }
 
-    (async () => {
-      // -------- Clubs I belong to --------
-      const { data: cmData } = await supabase
+    // -------- Clubs I belong to --------
+    const { data: cmData } = await supabase
         .from('club_members')
         .select('role, club:club_id(id, slug, name, description, deleted_at)')
         .eq('user_id', auth.userId);
@@ -230,8 +231,10 @@ export default function HomePage() {
       setActions(items);
 
       setLoading(false);
-    })();
   }, [auth.loading, auth.userId, supabase]);
+
+  useEffect(() => { load(); }, [load]);
+  useRefreshOnFocus(load, !auth.loading && !!auth.userId);
 
   // -------------------- SIGNED OUT --------------------
   if (!auth.loading && !auth.email) {
@@ -299,6 +302,7 @@ export default function HomePage() {
     : null;
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div className="space-y-12">
       <header>
         <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">Welcome back</p>
@@ -400,6 +404,7 @@ export default function HomePage() {
         </div>
       </section>
     </div>
+    </PullToRefresh>
   );
 }
 
