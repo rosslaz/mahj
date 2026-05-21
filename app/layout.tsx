@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
+import AppBadgeManager from '@/components/AppBadgeManager';
 
 export const metadata: Metadata = {
   title: 'Pungctual',
@@ -51,10 +52,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="max-w-6xl mx-auto px-6 py-10">{children}</main>
-        <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center">
-          Four winds · Three dragons · One Pungctual
+        <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center space-y-2">
+          <div>Four winds · Three dragons · One Pungctual</div>
+          {process.env.NEXT_PUBLIC_APP_VERSION && (
+            <div className="text-[10px] text-ink/30 tracking-[0.25em] normal-case">
+              v{process.env.NEXT_PUBLIC_APP_VERSION}
+            </div>
+          )}
         </footer>
         <InstallPrompt />
+        <AppBadgeManager />
         <script
           dangerouslySetInnerHTML={{
             __html: `
