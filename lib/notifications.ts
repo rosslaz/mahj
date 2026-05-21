@@ -414,8 +414,45 @@ export async function dispatchEventReminder(eventId: string): Promise<{
   const addrStr = formatAddressShort(e);
   const url = eventUrl(event.club.slug, event.activity.slug, event.id);
 
-  const title = `Today: ${event.name}`;
-  const body = addrStr ? `${timeStr} at ${addrStr}` : timeStr;
+  // Title varies with the event date relative to "today" (Eastern). For the
+  // automated cron, this is always "Today" because the cron only fires for
+  // same-day events. For the manual "Send reminder" button (which a host
+  // might press for an event days away), we pick a sensible phrasing.
+  const todayET = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());  // "YYYY-MM-DD"
+  const eventDate = event.date as string;  // "YYYY-MM-DD"
+
+  // Tomorrow in Eastern, as YYYY-MM-DD. Done via Date math on UTC values
+  // that happen to coincide with date boundaries in ET — close enough for
+  // the prefix decision since YYYY-MM-DD is unambiguous.
+  const tomorrowET = (() => {
+    const d = new Date(todayET + 'T12:00:00Z');  // safely mid-day, avoids DST edge
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  let titlePrefix: string;
+  let bodyDatePart = '';
+  if (eventDate === todayET) {
+    titlePrefix = 'Today: ';
+  } else if (eventDate === tomorrowET) {
+    titlePrefix = 'Tomorrow: ';
+  } else {
+    // Further out — show the date in the body since the title can't say
+    // anything timeline-specific that the user already knows.
+    titlePrefix = 'Reminder: ';
+    const friendlyDate = new Date(eventDate + 'T00:00:00').toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+    });
+    bodyDatePart = `${friendlyDate} · `;
+  }
+
+  const title = `${titlePrefix}${event.name}`;
+  const body = addrStr
+    ? `${bodyDatePart}${timeStr} at ${addrStr}`
+    : `${bodyDatePart}${timeStr}`;
 
   let delivered = 0;
   const results = await Promise.allSettled(
