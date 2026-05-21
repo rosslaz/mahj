@@ -71,6 +71,8 @@ export default function EventDetailPage() {
   // Transient toast shown briefly after a successful invite send. Lives on
   // the page (not in the modal) so it persists across the modal's unmount.
   const [inviteToast, setInviteToast] = useState<string | null>(null);
+  // Spinner state for the "Send reminder" button. Toast also reuses inviteToast.
+  const [sendingReminder, setSendingReminder] = useState(false);
 
   const load = useCallback(async () => {
     if (!cb.club) return;
@@ -277,6 +279,37 @@ export default function EventDetailPage() {
       .delete()
       .eq('id', signupId);
     if (error) alert(error.message); else load();
+  }
+
+  async function handleSendReminder() {
+    if (sendingReminder) return;
+    // Confirm because pushing notifications to a bunch of people is not
+    // something to do by accident. Day-of reminders go out automatically
+    // each morning anyway — this is for the "I added more attendees, push
+    // again" case or testing.
+    if (!confirm(`Send a reminder push to all approved attendees for "${night?.name}"?`)) return;
+    setSendingReminder(true);
+    setInviteToast(null);
+    try {
+      const { sendEventReminderNow } = await import('@/app/actions/reminders');
+      const res = await sendEventReminderNow(id);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      const { pushesDelivered, attendeesAttempted } = res;
+      if (attendeesAttempted === 0) {
+        setInviteToast('No approved attendees to remind.');
+      } else if (pushesDelivered === 0) {
+        setInviteToast('Sent — but no devices received it (attendees may not have push enabled).');
+      } else {
+        setInviteToast(`Reminder sent — ${pushesDelivered} device${pushesDelivered === 1 ? '' : 's'} ✓`);
+      }
+    } catch (e: any) {
+      alert(e?.message ?? 'Reminder failed.');
+    } finally {
+      setSendingReminder(false);
+    }
   }
 
   async function addPlayer(playerId: string) {
@@ -534,6 +567,11 @@ export default function EventDetailPage() {
             {canManage && approvedSignups.length > 0 && (
               <button onClick={() => setShowInviteModal(true)} className="btn btn-ghost text-xs">
                 Calendar invites
+              </button>
+            )}
+            {canManage && approvedSignups.length > 0 && (
+              <button onClick={handleSendReminder} disabled={sendingReminder} className="btn btn-ghost text-xs">
+                {sendingReminder ? 'Sending…' : 'Send reminder'}
               </button>
             )}
           </div>

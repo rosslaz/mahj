@@ -345,3 +345,186 @@ export async function dispatchClubMemberLeft(opts: {
     )
   );
 }
+
+// ============================================================
+// EVENT REMINDERS (cron-driven)
+// ============================================================
+
+// Format a time-of-day string for the reminder body.
+//   "19:00:00" → "7:00 PM"
+function formatTimeFriendly(timeStr: string | null): string {
+  if (!timeStr) return 'TBA';
+  const m = /^(\d{1,2}):(\d{2})/.exec(timeStr);
+  if (!m) return timeStr;
+  const hh = parseInt(m[1], 10);
+  const mi = m[2];
+  const period = hh >= 12 ? 'PM' : 'AM';
+  const hh12 = hh === 0 ? 12 : hh > 12 ? hh - 12 : hh;
+  const minPart = mi === '00' ? '' : ':' + mi;
+  return `${hh12}${minPart} ${period}`;
+}
+
+// Concise address line for the reminder body. Just street, or city/state
+// if street is missing.
+function formatAddressShort(event: { street: string | null; city: string | null; state: string | null }): string {
+  if (event.street) return event.street;
+  const parts = [event.city, event.state].filter(Boolean);
+  if (parts.length > 0) return parts.join(', ');
+  return '';
+}
+
+/**
+ * Send "today's event" reminders to all approved attendees of one event.
+ * Idempotent at the event level via reminder_sent_at — caller is responsible
+ * for stamping that timestamp after a successful run. (We don't stamp here
+ * so the caller can decide on retry semantics.)
+ *
+ * Returns counts. Does NOT throw on individual push failures.
+ */
+export async function dispatchEventReminder(eventId: string): Promise<{
+  attendeesAttempted: number;
+  pushesDelivered: number;
+}> {
+  const event = await loadEventContext(eventId);
+  if (!event) return { attendeesAttempted: 0, pushesDelivered: 0 };
+
+  // Need the address fields for the reminder body — not loaded by
+  // loadEventContext. Refetch the row with the address columns.
+  const { data: eventFull } = await svc()
+    .from('events')
+    .select('id, start_time, street, city, state')
+    .eq('id', eventId)
+    .maybeSingle();
+  if (!eventFull) return { attendeesAttempted: 0, pushesDelivered: 0 };
+
+  // Find approved attendees
+  const { data: signups } = await svc()
+    .from('night_signups')
+    .select('player_id')
+    .eq('event_id', eventId)
+    .eq('status', 'approved');
+
+  const userIds = ((signups as any[]) || []).map((s) => s.player_id as string);
+  if (userIds.length === 0) {
+    return { attendeesAttempted: 0, pushesDelivered: 0 };
+  }
+
+  const e = eventFull as any;
+  const timeStr = formatTimeFriendly(e.start_time);
+  const addrStr = formatAddressShort(e);
+  const url = eventUrl(event.club.slug, event.activity.slug, event.id);
+
+  const title = `Today: ${event.name}`;
+  const body = addrStr ? `${timeStr} at ${addrStr}` : timeStr;
+
+  let delivered = 0;
+  const results = await Promise.allSettled(
+    userIds.map(async (uid) => {
+      const r = await sendPushToUser(uid, {
+        title,
+        body,
+        url,
+        tag: `reminder-${event.id}`,
+        category: 'event_reminders',
+      });
+      if (r.delivered > 0) delivered += 1;
+    })
+  );
+  void results;
+
+  return { attendeesAttempted: userIds.length, pushesDelivered: delivered };
+}
+
+/**
+ * Find all events occurring "today" that haven't been reminded yet,
+ * dispatch reminders to attendees, and stamp reminder_sent_at on each.
+ *
+ * "Today" uses the Eastern timezone interpretation since that's how the
+ * rest of the app treats event date+time. The cron should run at a time
+ * that's "morning of, Eastern time" — see vercel.json.
+ *
+ * Returns counts for the cron handler to log.
+ */
+export async function runReminderSweep(opts?: { todayDateOverride?: string }): Promise<{
+  eventsConsidered: number;
+  eventsReminded: number;
+  pushesDelivered: number;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+
+  // Compute "today" in Eastern. The cron fires daily; we want the date in
+  // ET when this runs. Using Intl.DateTimeFormat to get the proper local date
+  // regardless of where the Vercel function physically runs.
+  const todayDate = opts?.todayDateOverride ?? (() => {
+    const nyFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return nyFormatter.format(new Date());  // "2026-03-17"
+  })();
+
+  // Query candidates: events scheduled for today that haven't been reminded
+  // yet. We don't filter on start_time here — the cron runs once in the
+  // morning, and even early-day events should get a heads-up.
+  const { data: candidates, error: qErr } = await svc()
+    .from('events')
+    .select('id, name, date')
+    .eq('date', todayDate)
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .is('reminder_sent_at', null);
+
+  if (qErr) {
+    errors.push(`Query error: ${qErr.message}`);
+    return { eventsConsidered: 0, eventsReminded: 0, pushesDelivered: 0, errors };
+  }
+
+  const events = ((candidates as any[]) || []);
+  if (events.length === 0) {
+    return { eventsConsidered: 0, eventsReminded: 0, pushesDelivered: 0, errors };
+  }
+
+  let totalReminded = 0;
+  let totalDelivered = 0;
+
+  // Process events in parallel — they're independent. Cap concurrency
+  // to keep the cron well under its 10s timeout.
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < events.length; i += BATCH_SIZE) {
+    const batch = events.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (ev) => {
+        try {
+          const r = await dispatchEventReminder(ev.id);
+          // Stamp the timestamp even on zero-attendee events so we don't
+          // re-query them on the next cron tick.
+          const stampNow = new Date().toISOString();
+          await svc()
+            .from('events')
+            .update({ reminder_sent_at: stampNow })
+            .eq('id', ev.id);
+          return r;
+        } catch (e: any) {
+          errors.push(`Event ${ev.id}: ${e?.message ?? e}`);
+          return { attendeesAttempted: 0, pushesDelivered: 0 };
+        }
+      })
+    );
+    for (const result of batchResults) {
+      if (result.status === 'fulfilled') {
+        totalReminded += 1;
+        totalDelivered += result.value.pushesDelivered;
+      }
+    }
+  }
+
+  return {
+    eventsConsidered: events.length,
+    eventsReminded: totalReminded,
+    pushesDelivered: totalDelivered,
+    errors,
+  };
+}
