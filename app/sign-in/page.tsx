@@ -7,15 +7,24 @@ import { getBrowserSupabase } from '@/lib/supabase-browser';
 
 // Two-phase sign-in:
 //   Phase 1 (email): user enters email; we call signInWithOtp which sends
-//     an email containing BOTH a magic link AND a 6-digit code.
+//     an email containing BOTH a magic link AND a one-time code (typically
+//     6 or 8 digits depending on the Supabase project settings).
 //   Phase 2 (verify): we show the "check email" confirmation, plus a
 //     collapsible "enter code instead" form. The link is preferred — but
 //     if the user is on a device where it would open in the wrong browser
 //     (default-browser ≠ app browser, PWA-from-Safari-default, etc.),
-//     they can type the 6-digit code from the email instead and complete
+//     they can type the code from the email instead and complete
 //     auth in this exact session.
 
 type Phase = 'email' | 'sent';
+
+// A typed code is "plausible" if it's exactly 6 or 8 digits after stripping
+// spaces/dashes — the two lengths Supabase uses by default depending on
+// project config. Used to enable/disable the verify button.
+function isPlausibleCode(raw: string): boolean {
+  const cleaned = raw.replace(/\s|-/g, '');
+  return /^\d{6}$/.test(cleaned) || /^\d{8}$/.test(cleaned);
+}
 
 export default function SignInPage() {
   const router = useRouter();
@@ -149,11 +158,11 @@ export default function SignInPage() {
               <div>
                 <h3 className="font-display text-xl mb-1">Enter code</h3>
                 <p className="text-xs text-ink/50 italic">
-                  Your email also contains a 6-digit code. Type it below to sign in here.
+                  Your email also contains a one-time code. Type it below to sign in here.
                 </p>
               </div>
               <div>
-                <label className="label">6-digit code</label>
+                <label className="label">Code from email</label>
                 <input
                   ref={codeInputRef}
                   type="text"
@@ -162,14 +171,22 @@ export default function SignInPage() {
                   onChange={(e) => setCode(e.target.value)}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  maxLength={7}  // 6 digits, but allow a typed space
-                  placeholder="123456"
+                  // Some projects use 6-digit codes, others 8. Allow up to 10
+                  // chars to accommodate either + a typed space.
+                  maxLength={10}
+                  placeholder="12345678"
                   required
                 />
               </div>
               {verifyError && <p className="text-cinnabar text-sm">{verifyError}</p>}
               <div className="flex items-center gap-3">
-                <button className="btn btn-jade flex-1 justify-center" disabled={verifying || code.replace(/\s|-/g, '').length < 6}>
+                {/* Enable submit when the entered code is a plausible length
+                    (6 or 8 digits — the two common Supabase configurations).
+                    Final validation happens server-side. */}
+                <button
+                  className="btn btn-jade flex-1 justify-center"
+                  disabled={verifying || !isPlausibleCode(code)}
+                >
                   {verifying ? 'Verifying…' : 'Verify & Sign In'}
                 </button>
                 <button
