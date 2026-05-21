@@ -224,24 +224,34 @@ export default function EventDetailPage() {
     if (!auth.userId || !cb.club) return;
     // For club members, auto-approve (status='approved'). For non-members
     // signing up to a public event, status='pending' — host must approve.
-    const status = cb.isMember ? 'approved' : 'pending';
+    const status: 'approved' | 'pending' = cb.isMember ? 'approved' : 'pending';
     if (status === 'approved' && approvedCount >= capacityMax) {
       alert('Signups are full.');
       return;
     }
-    const { error } = await supabase.from('night_signups').insert({
+    const { data, error } = await supabase.from('night_signups').insert({
       club_id: cb.club.id,
       event_id: id,
       player_id: auth.userId,
       status,
-    });
-    if (error) alert(error.message); else load();
+    }).select('id').single();
+    if (error) { alert(error.message); return; }
+    // Notify the host (fire and forget; load() will not wait on this)
+    if (data?.id) {
+      const { notifySignupCreated } = await import('@/app/actions/notifications');
+      notifySignupCreated(data.id as string, status).catch(() => {});
+    }
+    load();
   }
 
   async function selfWithdraw() {
     if (!auth.userId) return;
+    const withdrawnUserId = auth.userId;
     const { error } = await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', auth.userId);
-    if (error) alert(error.message); else load();
+    if (error) { alert(error.message); return; }
+    const { notifySignupWithdrawn } = await import('@/app/actions/notifications');
+    notifySignupWithdrawn(id, withdrawnUserId).catch(() => {});
+    load();
   }
 
   async function approvePending(signupId: string) {
@@ -254,7 +264,10 @@ export default function EventDetailPage() {
       .from('night_signups')
       .update({ status: 'approved' })
       .eq('id', signupId);
-    if (error) alert(error.message); else load();
+    if (error) { alert(error.message); return; }
+    const { notifySignupApproved } = await import('@/app/actions/notifications');
+    notifySignupApproved(signupId).catch(() => {});
+    load();
   }
 
   async function declinePending(signupId: string) {
@@ -274,14 +287,20 @@ export default function EventDetailPage() {
       player_id: playerId,
       status: 'approved',  // host-added members bypass any approval flow
     });
-    if (error) alert(error.message);
-    else { setShowAddPlayer(false); load(); }
+    if (error) { alert(error.message); return; }
+    const { notifyPlayerAdded } = await import('@/app/actions/notifications');
+    notifyPlayerAdded(id, playerId).catch(() => {});
+    setShowAddPlayer(false);
+    load();
   }
 
   async function removePlayer(playerId: string) {
     if (!confirm('Remove this player from the night?')) return;
     const { error } = await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', playerId);
-    if (error) alert(error.message); else load();
+    if (error) { alert(error.message); return; }
+    const { notifyPlayerRemoved } = await import('@/app/actions/notifications');
+    notifyPlayerRemoved(id, playerId).catch(() => {});
+    load();
   }
 
   async function assignTables() {

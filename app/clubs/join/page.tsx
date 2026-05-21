@@ -29,6 +29,8 @@ export default function JoinClubPage() {
   async function join(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!auth.userId) return;  // narrows for TS + safety guard
+    const userId = auth.userId;
     const cleaned = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (cleaned.length < 4) { setError('Enter a valid code.'); return; }
 
@@ -47,9 +49,10 @@ export default function JoinClubPage() {
       return;
     }
 
+    const clubId = (clubData as any).id;
     const { error: memErr } = await supabase.from('club_members').insert({
-      club_id: (clubData as any).id,
-      user_id: auth.userId,
+      club_id: clubId,
+      user_id: userId,
       role: 'member',
     });
 
@@ -57,6 +60,12 @@ export default function JoinClubPage() {
       setError(memErr.message);
       setSubmitting(false);
       return;
+    }
+
+    // Notify admins of the new member (don't wait — let routing proceed)
+    if (!memErr) {
+      const { notifyClubMemberJoined } = await import('@/app/actions/notifications');
+      notifyClubMemberJoined(clubId, userId).catch(() => {});
     }
 
     router.push(`/c/${(clubData as any).slug}`);
