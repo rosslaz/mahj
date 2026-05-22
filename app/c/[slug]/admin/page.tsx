@@ -7,6 +7,7 @@ import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
 import { ACTIVITY_TYPE_LABEL, type ActivityType } from '@/lib/use-activity';
+import ClubInvitesPanel from '@/components/ClubInvitesPanel';
 
 type Member = {
   user_id: string;
@@ -170,6 +171,9 @@ export default function ClubAdminPage() {
         </div>
         <p className="text-xs text-ink/50 italic">Share this with new players. They enter it at <code>/clubs/join</code>.</p>
       </section>
+
+      {/* Email invitations */}
+      <ClubInvitesPanel clubId={cb.club.id} clubName={cb.club.name} />
 
       {/* Members management */}
       <section>

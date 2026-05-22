@@ -75,10 +75,15 @@ export default function SignInPage() {
   // Show a brief farewell message if the user just deleted their account.
   // Read from URL directly to avoid useSearchParams Suspense requirement.
   const [showDeletedMessage, setShowDeletedMessage] = useState(false);
+  // Carry-through next-URL for post-signin destination (e.g. invite acceptance)
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (new URLSearchParams(window.location.search).get('deleted') === '1') {
-      setShowDeletedMessage(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('deleted') === '1') setShowDeletedMessage(true);
+    const n = params.get('next');
+    if (n && n.startsWith('/')) {  // only allow same-origin paths
+      setNextUrl(n);
     }
   }, []);
 
@@ -113,7 +118,11 @@ export default function SignInPage() {
       );
     } catch { /* sessionStorage might be unavailable; not fatal */ }
     const supabase = getBrowserSupabase();
-    const redirectTo = `${window.location.origin}/auth/callback`;
+    // Pass `next` through to the callback so post-sign-in we land on the
+    // requested destination (e.g. an invite acceptance page).
+    const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+    if (nextUrl) callbackUrl.searchParams.set('next', nextUrl);
+    const redirectTo = callbackUrl.toString();
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
@@ -144,7 +153,11 @@ export default function SignInPage() {
       setVerifying(false);
       return;
     }
-    router.push('/auth/callback?from=otp');
+    // Carry through `next` so post-signin we land on the right page.
+    const callbackPath = nextUrl
+      ? `/auth/callback?from=otp&next=${encodeURIComponent(nextUrl)}`
+      : '/auth/callback?from=otp';
+    router.push(callbackPath);
   }
 
   function resetToEmailEntry() {
