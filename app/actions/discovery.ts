@@ -48,10 +48,8 @@ export async function findNearbyEvents(opts: {
   maxMiles: number;
   type: NearbyEventType;
 }): Promise<Result<NearbyEvent[]>> {
-  console.log('[findNearbyEvents] called with', opts);
   try {
     const userId = await getCallerUserId();
-    console.log('[findNearbyEvents] userId =', userId);
     if (!userId) return { ok: false, error: 'Not signed in.' };
 
     const supabase = getSupabase();
