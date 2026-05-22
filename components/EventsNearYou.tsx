@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatTime12 } from '@/lib/game-utils';
 import { ACTIVITY_TYPE_LABEL } from '@/lib/use-activity';
-import type { NearbyEvent, NearbyEventType } from '@/app/actions/discovery';
+import { findNearbyEvents, type NearbyEvent, type NearbyEventType } from '@/app/actions/discovery';
 
 const DISTANCE_OPTIONS: number[] = [5, 10, 25, 50, 100];
 const TYPE_OPTIONS: { value: NearbyEventType; label: string }[] = [
@@ -45,7 +45,6 @@ export default function EventsNearYou() {
     setState({ kind: 'loading' });
     (async () => {
       try {
-        const { findNearbyEvents } = await import('@/app/actions/discovery');
         const res = await findNearbyEvents({ maxMiles, type });
         if (cancelled) return;
         if (!res) {
