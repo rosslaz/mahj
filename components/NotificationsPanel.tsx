@@ -10,6 +10,12 @@ import {
   unsubscribeFromPush,
   type PushSupportLevel,
 } from '@/lib/push-client';
+import {
+  registerPushSubscription,
+  unregisterPushSubscription,
+  sendTestPush,
+  updateNotificationPreferences,
+} from '@/app/actions/push';
 
 type Device = {
   id: string;
@@ -103,7 +109,6 @@ export default function NotificationsPanel() {
     try {
       const sub = await subscribeToPush();
       if (!sub) throw new Error('Subscription failed.');
-      const { registerPushSubscription } = await import('@/app/actions/push');
       const res = await registerPushSubscription(sub);
       if (!res.ok) throw new Error(res.error);
       setThisDeviceSubscribed(true);
@@ -121,7 +126,6 @@ export default function NotificationsPanel() {
     try {
       const endpoint = await unsubscribeFromPush();
       if (endpoint) {
-        const { unregisterPushSubscription } = await import('@/app/actions/push');
         await unregisterPushSubscription(endpoint);
       }
       setThisDeviceSubscribed(false);
@@ -138,7 +142,6 @@ export default function NotificationsPanel() {
     if (!confirm(`Remove notifications for ${labelForUA(device.user_agent)}?`)) return;
     setBusy(true);
     try {
-      const { unregisterPushSubscription } = await import('@/app/actions/push');
       const res = await unregisterPushSubscription(device.endpoint);
       if (!res.ok) throw new Error(res.error);
       // If we just deleted THIS device, also unsubscribe locally
@@ -160,7 +163,6 @@ export default function NotificationsPanel() {
     setTestResult(null);
     setBusy(true);
     try {
-      const { sendTestPush } = await import('@/app/actions/push');
       const res = await sendTestPush();
       if (!res.ok) throw new Error(res.error);
       const { delivered, attempted } = res.data!;
@@ -183,7 +185,6 @@ export default function NotificationsPanel() {
     const next = { ...prefs, [key]: value };
     setPrefs(next);  // optimistic
     try {
-      const { updateNotificationPreferences } = await import('@/app/actions/push');
       const res = await updateNotificationPreferences({ [key]: value });
       if (!res.ok) throw new Error(res.error);
     } catch (e: any) {

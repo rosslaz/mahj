@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
+import { createClubInvites, revokeClubInvite } from '@/app/actions/club-invites';
 
 const MAX_INVITES_PER_SEND = 20;
 
@@ -77,7 +78,6 @@ export default function ClubInvitesPanel({ clubId, clubName }: { clubId: string;
     setSendError(null);
     setSendResult(null);
     try {
-      const { createClubInvites } = await import('@/app/actions/club-invites');
       const res = await createClubInvites({
         clubId,
         emails: parsedEmails,
@@ -109,7 +109,6 @@ export default function ClubInvitesPanel({ clubId, clubName }: { clubId: string;
 
   async function handleRevoke(inviteId: string) {
     if (!confirm('Revoke this invitation? The link will stop working.')) return;
-    const { revokeClubInvite } = await import('@/app/actions/club-invites');
     const res = await revokeClubInvite(inviteId);
     if (!res.ok) {
       alert(res.error);

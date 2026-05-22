@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
+import { deleteMyAccount } from '@/app/actions/delete-account';
 
 /**
  * "Danger zone" section on the profile page. Contains the delete-account flow.
@@ -26,7 +27,6 @@ export default function DangerZone() {
     setError(null);
     setBusy(true);
     try {
-      const { deleteMyAccount } = await import('@/app/actions/delete-account');
       const res = await deleteMyAccount(confirmText);
       if (!res.ok) {
         setError(res.error);

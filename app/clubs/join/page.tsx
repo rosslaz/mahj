@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
+import { notifyClubMemberJoined } from '@/app/actions/notifications';
 
 export default function JoinClubPage() {
   const router = useRouter();
@@ -64,7 +65,6 @@ export default function JoinClubPage() {
 
     // Notify admins of the new member (don't wait — let routing proceed)
     if (!memErr) {
-      const { notifyClubMemberJoined } = await import('@/app/actions/notifications');
       notifyClubMemberJoined(clubId, userId).catch(() => {});
     }
 

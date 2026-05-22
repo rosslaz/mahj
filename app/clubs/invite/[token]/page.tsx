@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/use-auth';
+import { acceptClubInvite } from '@/app/actions/club-invites';
 
 /**
  * Invite acceptance route. The user lands here from the email link.
@@ -44,7 +45,6 @@ export default function InviteAcceptancePage() {
     setStatus('accepting');
     (async () => {
       try {
-        const { acceptClubInvite } = await import('@/app/actions/club-invites');
         const res = await acceptClubInvite(token);
         if (!res.ok) {
           setError(res.error);

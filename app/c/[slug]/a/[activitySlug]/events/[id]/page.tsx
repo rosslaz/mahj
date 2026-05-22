@@ -11,6 +11,15 @@ import { shuffle, formatTime12, windForGame, assignPlayersToTables, WIND_LABEL, 
 import { formatAddressLines } from '@/lib/address';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import {
+  notifySignupCreated,
+  notifySignupWithdrawn,
+  notifySignupApproved,
+  notifyPlayerAdded,
+  notifyPlayerRemoved,
+} from '@/app/actions/notifications';
+import { sendEventReminderNow } from '@/app/actions/reminders';
+import { sendCalendarInvites } from '@/app/actions/send-invites';
 
 type Night = {
   id: string;
@@ -240,7 +249,6 @@ export default function EventDetailPage() {
     if (error) { alert(error.message); return; }
     // Notify the host (fire and forget; load() will not wait on this)
     if (data?.id) {
-      const { notifySignupCreated } = await import('@/app/actions/notifications');
       notifySignupCreated(data.id as string, status).catch(() => {});
     }
     load();
@@ -251,7 +259,6 @@ export default function EventDetailPage() {
     const withdrawnUserId = auth.userId;
     const { error } = await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', auth.userId);
     if (error) { alert(error.message); return; }
-    const { notifySignupWithdrawn } = await import('@/app/actions/notifications');
     notifySignupWithdrawn(id, withdrawnUserId).catch(() => {});
     load();
   }
@@ -267,7 +274,6 @@ export default function EventDetailPage() {
       .update({ status: 'approved' })
       .eq('id', signupId);
     if (error) { alert(error.message); return; }
-    const { notifySignupApproved } = await import('@/app/actions/notifications');
     notifySignupApproved(signupId).catch(() => {});
     load();
   }
@@ -291,7 +297,6 @@ export default function EventDetailPage() {
     setSendingReminder(true);
     setInviteToast(null);
     try {
-      const { sendEventReminderNow } = await import('@/app/actions/reminders');
       const res = await sendEventReminderNow(id);
       if (!res.ok) {
         alert(res.error);
@@ -321,7 +326,6 @@ export default function EventDetailPage() {
       status: 'approved',  // host-added members bypass any approval flow
     });
     if (error) { alert(error.message); return; }
-    const { notifyPlayerAdded } = await import('@/app/actions/notifications');
     notifyPlayerAdded(id, playerId).catch(() => {});
     setShowAddPlayer(false);
     load();
@@ -331,7 +335,6 @@ export default function EventDetailPage() {
     if (!confirm('Remove this player from the night?')) return;
     const { error } = await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', playerId);
     if (error) { alert(error.message); return; }
-    const { notifyPlayerRemoved } = await import('@/app/actions/notifications');
     notifyPlayerRemoved(id, playerId).catch(() => {});
     load();
   }
@@ -1193,7 +1196,6 @@ function CalendarInviteModal({
     setResult(null);
     try {
       // Dynamic import so the server action ships only when needed
-      const { sendCalendarInvites } = await import('@/app/actions/send-invites');
       const res = await sendCalendarInvites({
         eventId,
         customMessage: customMessage.trim() || undefined,

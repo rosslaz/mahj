@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/use-auth';
+import { recordLegalAcceptance } from '@/app/actions/legal';
 
 export default function AcceptTermsPageWrapper() {
   return (
@@ -48,7 +49,6 @@ function AcceptTermsPage() {
     setBusy(true);
     setError(null);
     try {
-      const { recordLegalAcceptance } = await import('@/app/actions/legal');
       const res = await recordLegalAcceptance({
         parentalConsentAttested: underAge ? parentalConsent : true,
       });

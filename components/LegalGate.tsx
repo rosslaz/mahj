@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/use-auth';
+import { recordLegalAcceptance, checkLegalAcceptance } from '@/app/actions/legal';
 
 /**
  * Headless component that ensures every signed-in user has accepted the
@@ -55,7 +56,6 @@ export default function LegalGate() {
         const raw = sessionStorage.getItem('pungctual:pending-acceptance');
         if (raw) {
           const parsed = JSON.parse(raw);
-          const { recordLegalAcceptance } = await import('@/app/actions/legal');
           await recordLegalAcceptance({
             parentalConsentAttested: !!parsed.parentalConsent,
           });
@@ -67,7 +67,6 @@ export default function LegalGate() {
 
       // Step 2: check whether the user is now in good standing
       try {
-        const { checkLegalAcceptance } = await import('@/app/actions/legal');
         const ok = await checkLegalAcceptance();
         if (cancelled) return;
         if (ok === false) {
