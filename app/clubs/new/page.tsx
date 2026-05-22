@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { slugify } from '@/lib/slug';
+import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
+import { validateZip } from '@/lib/address';
 
 function randomSuffix(len = 4): string {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -24,6 +26,7 @@ export default function NewClubPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [addr, setAddr] = useState<AddressFieldsValue>({ street: '', city: '', state: '', zip: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +62,14 @@ export default function NewClubPage() {
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('Name is required.'); return; }
+    if (isPublic) {
+      if (!addr.city.trim() || !addr.state || !addr.zip.trim()) {
+        setError('Public clubs require city, state, and ZIP.');
+        return;
+      }
+      const zipErr = validateZip(addr.zip.trim());
+      if (zipErr) { setError(zipErr); return; }
+    }
     setSubmitting(true);
 
     try {
@@ -75,6 +86,11 @@ export default function NewClubPage() {
           is_public: isPublic,
           owner_user_id: auth.userId,
           join_code: codeData as string,
+          // Address: store whatever was entered (even for private clubs).
+          // The DB-level check constraint only enforces required-when-public.
+          city: addr.city.trim() || null,
+          state: addr.state || null,
+          zip: addr.zip.trim() || null,
         })
         .select()
         .single();
@@ -140,6 +156,16 @@ export default function NewClubPage() {
             </span>
           </label>
         </div>
+
+        {isPublic && (
+          <div className="pl-7 pt-2 border-l-2 border-jade/30">
+            <AddressFields
+              value={addr}
+              onChange={setAddr}
+              mode="public_club"
+            />
+          </div>
+        )}
 
         {error && <p className="text-cinnabar text-sm">{error}</p>}
 

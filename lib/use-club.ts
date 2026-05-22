@@ -12,6 +12,9 @@ export type Club = {
   is_public: boolean;
   join_code: string | null;
   owner_user_id: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 };
 
 export type ClubRole = 'owner' | 'admin' | 'member' | null;
@@ -50,7 +53,7 @@ export function useClub(slug: string | undefined | null): ClubContextState {
     (async () => {
       const { data: clubData } = await supabase
         .from('clubs')
-        .select('id, slug, name, description, is_public, join_code, owner_user_id')
+        .select('id, slug, name, description, is_public, join_code, owner_user_id, city, state, zip')
         .eq('slug', slug)
         .is('deleted_at', null)
         .maybeSingle();

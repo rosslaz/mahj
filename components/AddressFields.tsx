@@ -14,6 +14,8 @@ export type AddressFieldsValue = {
 //   - 'public_event':   city + state required (will be shown to non-members
 //                       for discovery); street optional but encouraged
 //                       (visible only to approved attendees)
+//   - 'public_club':    city + state + zip required (used for distance-based
+//                       discovery). Street not collected for clubs.
 //   - 'all_required':   every field required
 export function AddressFields({
   value,
@@ -23,14 +25,16 @@ export function AddressFields({
 }: {
   value: AddressFieldsValue;
   onChange: (next: AddressFieldsValue) => void;
-  mode?: 'optional' | 'public_event' | 'all_required';
+  mode?: 'optional' | 'public_event' | 'public_club' | 'all_required';
   helperText?: string;
 }) {
   function set<K extends keyof AddressFieldsValue>(key: K, v: AddressFieldsValue[K]) {
     onChange({ ...value, [key]: v });
   }
   const cityStateRequired = mode !== 'optional';
+  const zipRequired = mode === 'public_club' || mode === 'all_required';
   const streetRequired = mode === 'all_required';
+  const showStreet = mode !== 'public_club';
 
   return (
     <fieldset className="space-y-4">
@@ -41,21 +45,23 @@ export function AddressFields({
         )}
       </legend>
 
-      <div>
-        <input
-          className="input"
-          value={value.street}
-          onChange={(e) => set('street', e.target.value)}
-          placeholder={streetRequired ? 'Street address' : 'Street address (optional)'}
-          autoComplete="street-address"
-          required={streetRequired}
-        />
-        {mode === 'public_event' && (
-          <p className="text-xs text-ink/40 italic mt-1">
-            Street is shown only to attendees once their signup is approved.
-          </p>
-        )}
-      </div>
+      {showStreet && (
+        <div>
+          <input
+            className="input"
+            value={value.street}
+            onChange={(e) => set('street', e.target.value)}
+            placeholder={streetRequired ? 'Street address' : 'Street address (optional)'}
+            autoComplete="street-address"
+            required={streetRequired}
+          />
+          {mode === 'public_event' && (
+            <p className="text-xs text-ink/40 italic mt-1">
+              Street is shown only to attendees once their signup is approved.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 sm:col-span-6">
@@ -87,10 +93,11 @@ export function AddressFields({
             className="input"
             value={value.zip}
             onChange={(e) => set('zip', e.target.value)}
-            placeholder="ZIP"
+            placeholder={zipRequired ? 'ZIP *' : 'ZIP'}
             autoComplete="postal-code"
             inputMode="numeric"
             maxLength={10}
+            required={zipRequired}
           />
         </div>
       </div>
@@ -98,6 +105,11 @@ export function AddressFields({
       {mode === 'public_event' && (
         <p className="text-xs text-cinnabar/80 italic">
           City and state are visible publicly so people can discover this event nearby.
+        </p>
+      )}
+      {mode === 'public_club' && (
+        <p className="text-xs text-cinnabar/80 italic">
+          City, state, and ZIP are used to show your club to nearby players looking to discover clubs.
         </p>
       )}
       {helperText && <p className="text-xs text-ink/40 italic">{helperText}</p>}

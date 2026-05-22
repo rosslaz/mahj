@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
+import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
+import { validateZip } from '@/lib/address';
 
 type AdminCandidate = {
   user_id: string;
@@ -24,6 +26,7 @@ export default function ClubSettingsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [addr, setAddr] = useState<AddressFieldsValue>({ street: '', city: '', state: '', zip: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +43,12 @@ export default function ClubSettingsPage() {
     setName(cb.club.name);
     setDescription(cb.club.description || '');
     setIsPublic(cb.club.is_public);
+    setAddr({
+      street: '',
+      city: cb.club.city || '',
+      state: cb.club.state || '',
+      zip: cb.club.zip || '',
+    });
   }, [cb.club]);
 
   useEffect(() => {
@@ -83,6 +92,14 @@ export default function ClubSettingsPage() {
     setError(null);
     setSaveMsg(null);
     if (!name.trim()) { setError('Name is required.'); return; }
+    if (isPublic) {
+      if (!addr.city.trim() || !addr.state || !addr.zip.trim()) {
+        setError('Public clubs require city, state, and ZIP.');
+        return;
+      }
+      const zipErr = validateZip(addr.zip.trim());
+      if (zipErr) { setError(zipErr); return; }
+    }
     setSaving(true);
     const { error: updErr } = await supabase
       .from('clubs')
@@ -90,6 +107,9 @@ export default function ClubSettingsPage() {
         name: name.trim(),
         description: description.trim() || null,
         is_public: isPublic,
+        city: addr.city.trim() || null,
+        state: addr.state || null,
+        zip: addr.zip.trim() || null,
       })
       .eq('id', cb.club!.id);
     setSaving(false);
@@ -170,6 +190,16 @@ export default function ClubSettingsPage() {
             </span>
           </label>
         </div>
+
+        {isPublic && (
+          <div className="pl-7 pt-2 border-l-2 border-jade/30">
+            <AddressFields
+              value={addr}
+              onChange={setAddr}
+              mode="public_club"
+            />
+          </div>
+        )}
 
         {error && <p className="text-cinnabar text-sm">{error}</p>}
         {saveMsg && <p className="text-jade text-sm">{saveMsg}</p>}
