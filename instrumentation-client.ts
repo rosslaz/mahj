@@ -1,31 +1,27 @@
-// This file configures the initialization of Sentry on the client.
-// The added config here will be used whenever a users loads a page in their browser.
-// https://docs.sentry.io/platforms/javascript/guides/nextjs/
+﻿// Sentry client-side init. Runs in the browser bundle.
+//
+// This file is required by Next.js's instrumentationHook experiment when
+// using @sentry/nextjs. The server-side counterpart is sentry.server.config.ts.
 
-import * as Sentry from "@sentry/nextjs";
+import * as Sentry from '@sentry/nextjs';
 
 Sentry.init({
-  dsn: "https://7e6daec6de403c98db97b5d98074e0a9@o4511431060488192.ingest.us.sentry.io/4511431070056448",
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-  // Add optional integrations for additional features
-  integrations: [Sentry.replayIntegration()],
+  // Trace 10% of transactions in prod
+  tracesSampleRate: 0.1,
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+  // No replay or session recording — just error capture
+  // (those features need separate setup)
 
-  // Define how likely Replay events are sampled.
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
+  environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
 
-  // Define how likely Replay events are sampled when an error occurs.
-  replaysOnErrorSampleRate: 1.0,
+  release: process.env.NEXT_PUBLIC_APP_VERSION
+    ? \pungctual@\\
+    : undefined,
 
-  // Enable sending user PII (Personally Identifiable Information)
-  // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
-  sendDefaultPii: true,
+  beforeSend(event) {
+    if (process.env.NODE_ENV === 'development') return null;
+    return event;
+  },
 });
-
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
