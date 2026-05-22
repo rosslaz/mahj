@@ -24,8 +24,6 @@ const TYPE_OPTIONS: { value: NearbyEventType; label: string }[] = [
 
 type DiscoveryMode = 'events' | 'clubs';
 
-// Discriminated union for the load state — handles loading, data, and
-// various error/empty conditions per mode.
 type LoadState =
   | { kind: 'idle' }
   | { kind: 'loading' }
@@ -40,7 +38,11 @@ type LoadState =
  * Events and Clubs. Distance filter applies to both. Activity-type filter
  * shows only in Events mode.
  *
- * Lookup origin: the user's profile zip. (Browser geolocation not used yet.)
+ * Lookup origin: the user's profile zip.
+ *
+ * Visual language matches the rest of the dashboard:
+ *   - Small all-caps section label (not a display heading)
+ *   - Card grid for results (matches Upcoming + My Clubs)
  */
 export default function NearYou() {
   const [mode, setMode] = useState<DiscoveryMode>('events');
@@ -88,47 +90,42 @@ export default function NearYou() {
       }
     })();
     return () => { cancelled = true; };
-    // type only matters when mode === 'events', but listing it as a dep is
-    // harmless — switching mode will refetch anyway.
   }, [mode, maxMiles, type]);
 
   return (
     <section>
-      <header className="mb-5">
-        <h2 className="font-display text-3xl">Near you</h2>
-        <p className="text-xs text-ink/50 italic mt-1">
-          Public events and clubs in your area.
-        </p>
-      </header>
-
-      {/* Mode tabs */}
-      <div className="grid grid-cols-2 gap-0 border border-ink/15 mb-5 max-w-xs">
-        <button
-          type="button"
-          onClick={() => setMode('events')}
-          className={`py-2 px-4 text-xs tracking-[0.2em] uppercase transition-colors ${
-            mode === 'events'
-              ? 'bg-jade text-bone'
-              : 'bg-bone text-ink/60 hover:bg-ink/5'
-          }`}
-        >
-          Events
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('clubs')}
-          className={`py-2 px-4 text-xs tracking-[0.2em] uppercase transition-colors ${
-            mode === 'clubs'
-              ? 'bg-jade text-bone'
-              : 'bg-bone text-ink/60 hover:bg-ink/5'
-          }`}
-        >
-          Clubs
-        </button>
+      {/* Section label — matches Next Event / For You / Upcoming / etc. */}
+      <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Near You</div>
+        {/* Mode tabs sit on the same row as the label, pushed right */}
+        <div className="flex items-center gap-1.5 text-[10px] tracking-[0.2em] uppercase">
+          <button
+            type="button"
+            onClick={() => setMode('events')}
+            className={`px-3 py-1 border transition-colors ${
+              mode === 'events'
+                ? 'bg-jade text-bone border-jade'
+                : 'bg-bone text-ink/50 border-ink/15 hover:border-jade/40 hover:text-jade'
+            }`}
+          >
+            Events
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('clubs')}
+            className={`px-3 py-1 border transition-colors ${
+              mode === 'clubs'
+                ? 'bg-jade text-bone border-jade'
+                : 'bg-bone text-ink/50 border-ink/15 hover:border-jade/40 hover:text-jade'
+            }`}
+          >
+            Clubs
+          </button>
+        </div>
       </div>
 
-      {/* Distance + (events only) type filters */}
-      <div className="flex items-center gap-2 flex-wrap mb-5">
+      {/* Filters row: distance dropdown + (events only) type chips */}
+      <div className="flex items-center gap-2 flex-wrap mb-4">
         <div className="flex items-center gap-2 text-xs">
           <label className="text-ink/50 tracking-[0.15em] uppercase">Within</label>
           <select
@@ -184,15 +181,15 @@ export default function NearYou() {
       ) : state.kind === 'error' ? (
         <p className="text-cinnabar text-sm">{state.message}</p>
       ) : state.kind === 'events-data' ? (
-        <EventsList events={state.events} maxMiles={maxMiles} type={type} />
+        <EventCards events={state.events} maxMiles={maxMiles} type={type} />
       ) : state.kind === 'clubs-data' ? (
-        <ClubsList clubs={state.clubs} maxMiles={maxMiles} />
+        <ClubCards clubs={state.clubs} maxMiles={maxMiles} />
       ) : null}
     </section>
   );
 }
 
-function EventsList({
+function EventCards({
   events,
   maxMiles,
   type,
@@ -213,38 +210,38 @@ function EventsList({
     );
   }
   return (
-    <ul className="divide-y divide-ink/10 border-y border-ink/10">
-      {events.map((ev) => {
-        const dateLabel = formatEventDate(ev.date);
-        const timeLabel = ev.start_time ? formatTime12(ev.start_time) : null;
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {events.map((ev, i) => {
         const typeLabel = ACTIVITY_TYPE_LABEL[ev.activity.type as keyof typeof ACTIVITY_TYPE_LABEL] || ev.activity.type;
         return (
-          <li key={ev.id} className="py-3">
-            <Link
-              href={`/c/${ev.club.slug}/a/${ev.activity.slug}/events/${ev.id}`}
-              className="block hover:bg-ink/5 -mx-2 px-2 py-1"
-            >
-              <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm">{ev.name}</div>
-                  <div className="text-xs text-ink/50 mt-0.5">
-                    {ev.club.name} · <span className="uppercase tracking-[0.1em] text-ink/40">{typeLabel}</span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs text-ink/60">{dateLabel}{timeLabel ? ` · ${timeLabel}` : ''}</div>
-                  <div className="text-[10px] text-jade tracking-[0.1em] uppercase">{ev.miles} mi</div>
-                </div>
-              </div>
-            </Link>
-          </li>
+          <Link
+            key={ev.id}
+            href={`/c/${ev.club.slug}/a/${ev.activity.slug}/events/${ev.id}`}
+            className="tile-border p-5 hover:border-cinnabar/40 transition-colors fade-up flex flex-col"
+            style={{ animationDelay: `${i * 0.04}s` }}
+          >
+            <div className="text-[10px] tracking-[0.25em] uppercase text-jade mb-1.5">
+              {ev.club.name} · {typeLabel}
+            </div>
+            <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-2">
+              {new Date(ev.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              {ev.start_time && <span className="ml-2">· {formatTime12(ev.start_time)}</span>}
+            </div>
+            <div className="font-display text-xl mb-1 line-clamp-2">{ev.name}</div>
+            {(ev.city && ev.state) && (
+              <div className="text-xs text-ink/50 italic">{ev.city}, {ev.state}</div>
+            )}
+            <div className="mt-auto flex items-center justify-end pt-3 border-t border-ink/10">
+              <span className="text-[10px] tracking-[0.15em] uppercase text-jade">{ev.miles} mi away</span>
+            </div>
+          </Link>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
-function ClubsList({ clubs, maxMiles }: { clubs: NearbyClub[]; maxMiles: number }) {
+function ClubCards({ clubs, maxMiles }: { clubs: NearbyClub[]; maxMiles: number }) {
   if (clubs.length === 0) {
     return (
       <div className="tile-border p-5">
@@ -254,41 +251,38 @@ function ClubsList({ clubs, maxMiles }: { clubs: NearbyClub[]; maxMiles: number 
     );
   }
   return (
-    <ul className="divide-y divide-ink/10 border-y border-ink/10">
-      {clubs.map((c) => {
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {clubs.map((c, i) => {
         const location = c.city && c.state ? `${c.city}, ${c.state}` : null;
         return (
-          <li key={c.id} className="py-3">
-            <Link
-              href={`/c/${c.slug}`}
-              className="block hover:bg-ink/5 -mx-2 px-2 py-1"
-            >
-              <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm">{c.name}</div>
-                  <div className="text-xs text-ink/50 mt-0.5 flex items-center gap-2 flex-wrap">
-                    {location && <span>{location}</span>}
-                    <span className="text-ink/30">·</span>
-                    <span>{memberRangeLabel(c.memberRange)}</span>
-                    {c.upcomingPublicEventCount > 0 && (
-                      <>
-                        <span className="text-ink/30">·</span>
-                        <span className="text-jade">
-                          {c.upcomingPublicEventCount} upcoming event{c.upcomingPublicEventCount === 1 ? '' : 's'}
-                        </span>
-                      </>
-                    )}
-                  </div>
+          <Link
+            key={c.id}
+            href={`/c/${c.slug}`}
+            className="tile-border p-5 hover:border-cinnabar/40 transition-colors fade-up flex flex-col"
+            style={{ animationDelay: `${i * 0.04}s` }}
+          >
+            {location && (
+              <div className="text-[10px] tracking-[0.25em] uppercase text-jade mb-1.5">{location}</div>
+            )}
+            <div className="font-display text-xl mb-2 line-clamp-2">{c.name}</div>
+            {c.description && (
+              <div className="text-sm text-ink/60 line-clamp-2 mb-3">{c.description}</div>
+            )}
+            <div className="mt-auto pt-3 border-t border-ink/10 space-y-1.5">
+              <div className="text-[11px] text-ink/50">{memberRangeLabel(c.memberRange)}</div>
+              {c.upcomingPublicEventCount > 0 && (
+                <div className="text-[11px] text-cinnabar/80">
+                  {c.upcomingPublicEventCount} upcoming event{c.upcomingPublicEventCount === 1 ? '' : 's'}
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[10px] text-jade tracking-[0.1em] uppercase">{c.miles} mi</div>
-                </div>
+              )}
+              <div className="flex items-center justify-end">
+                <span className="text-[10px] tracking-[0.15em] uppercase text-jade">{c.miles} mi away</span>
               </div>
-            </Link>
-          </li>
+            </div>
+          </Link>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -298,15 +292,4 @@ function memberRangeLabel(range: ClubMemberRange): string {
     case 'medium': return '10–25 members';
     case 'large': return '26+ members';
   }
-}
-
-// "Mar 17" or "Mar 17, 2027" if not current year
-function formatEventDate(isoDate: string): string {
-  const d = new Date(isoDate + 'T00:00:00');
-  const now = new Date();
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  });
 }
