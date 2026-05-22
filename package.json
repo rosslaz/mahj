@@ -1,9 +1,10 @@
 {
   "name": "pungctual",
-  "version": "2.10.1",
+  "version": "2.10.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/stamp-sw-version.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
