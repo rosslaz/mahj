@@ -56,6 +56,17 @@ export default function SignInPage() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
+  // Legal acceptance state. We collect on the email-entry screen and store
+  // server-side after authentication completes. Three checkboxes:
+  //   - termsAccepted: ToS + AUP (combined since AUP is part of ToS)
+  //   - privacyAcknowledged: Privacy Policy
+  //   - parentalConsent: only required if user indicates they're under 18
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+  // True when the user marks themselves as under 18. Drives parental-consent UI.
+  const [underAge, setUnderAge] = useState(false);
+  const [parentalConsent, setParentalConsent] = useState(false);
+
   // PWA detection. Initialized to null so the first render doesn't make
   // a layout decision before we know. Effect resolves it once.
   const [isPwa, setIsPwa] = useState<boolean | null>(null);
@@ -83,6 +94,14 @@ export default function SignInPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    // Stash the parental-consent attestation so we can record it after the
+    // user completes auth. Survives the magic-link round trip and OTP path.
+    try {
+      sessionStorage.setItem(
+        'pungctual:pending-acceptance',
+        JSON.stringify({ parentalConsent: underAge ? parentalConsent : true })
+      );
+    } catch { /* sessionStorage might be unavailable; not fatal */ }
     const supabase = getBrowserSupabase();
     const redirectTo = `${window.location.origin}/auth/callback`;
     const { error } = await supabase.auth.signInWithOtp({
@@ -156,8 +175,80 @@ export default function SignInPage() {
               New here? Just enter your email — we'll create your account when you sign in.
             </p>
           </div>
+
+          {/* Legal acceptance — required for all users on every sign-in.
+              Re-ticking on each sign-in is intentional: it reinforces awareness
+              that the user is opting into specific documents. recordLegalAcceptance
+              is a no-op (upsert) for users who've already accepted the current version. */}
+          <div className="border-t border-ink/10 pt-5 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                required
+              />
+              <span className="text-ink/80">
+                I agree to the{' '}
+                <Link href="/terms" target="_blank" className="text-jade underline">Terms of Service</Link>
+                {' '}and{' '}
+                <Link href="/acceptable-use" target="_blank" className="text-jade underline">Acceptable Use Policy</Link>.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={privacyAcknowledged}
+                onChange={(e) => setPrivacyAcknowledged(e.target.checked)}
+                className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                required
+              />
+              <span className="text-ink/80">
+                I have read the{' '}
+                <Link href="/privacy" target="_blank" className="text-jade underline">Privacy Policy</Link>.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={underAge}
+                onChange={(e) => { setUnderAge(e.target.checked); if (!e.target.checked) setParentalConsent(false); }}
+                className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+              />
+              <span className="text-ink/80">
+                I am under 18 years old.
+              </span>
+            </label>
+            {underAge && (
+              <label className="flex items-start gap-3 cursor-pointer text-sm ml-7 pl-1 border-l-2 border-cinnabar/30 -mt-1 pl-3">
+                <input
+                  type="checkbox"
+                  checked={parentalConsent}
+                  onChange={(e) => setParentalConsent(e.target.checked)}
+                  className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                  required={underAge}
+                />
+                <span className="text-ink/80">
+                  My parent or legal guardian has read these documents and consents to my use of Pungctual.
+                </span>
+              </label>
+            )}
+            <p className="text-[11px] text-ink/40 italic pt-1">
+              You must be at least 13 years old to use Pungctual.
+            </p>
+          </div>
+
           {error && <p className="text-cinnabar text-sm">{error}</p>}
-          <button className="btn btn-jade w-full justify-center" disabled={busy}>
+          <button
+            className="btn btn-jade w-full justify-center"
+            disabled={
+              busy ||
+              !termsAccepted ||
+              !privacyAcknowledged ||
+              (underAge && !parentalConsent)
+            }
+          >
             {busy ? 'Sending…' : 'Send Sign-In Email'}
           </button>
         </form>

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
 import AppBadgeManager from '@/components/AppBadgeManager';
+import LegalGate from '@/components/LegalGate';
 
 export const metadata: Metadata = {
   title: 'Pungctual',
@@ -52,8 +53,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="max-w-6xl mx-auto px-6 py-10">{children}</main>
-        <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center space-y-2">
+        <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center space-y-3">
           <div>Four winds · Three dragons · One Pungctual</div>
+          <div className="space-x-4 normal-case tracking-[0.15em] text-[11px]">
+            <Link href="/terms" className="hover:text-cinnabar">Terms</Link>
+            <span className="text-ink/20">·</span>
+            <Link href="/privacy" className="hover:text-cinnabar">Privacy</Link>
+            <span className="text-ink/20">·</span>
+            <Link href="/acceptable-use" className="hover:text-cinnabar">Acceptable Use</Link>
+          </div>
           {process.env.NEXT_PUBLIC_APP_VERSION && (
             <div className="text-[10px] text-ink/30 tracking-[0.25em] normal-case">
               v{process.env.NEXT_PUBLIC_APP_VERSION}
@@ -62,6 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </footer>
         <InstallPrompt />
         <AppBadgeManager />
+        <LegalGate />
         <script
           dangerouslySetInnerHTML={{
             __html: `
