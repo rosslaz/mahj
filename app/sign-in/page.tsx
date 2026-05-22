@@ -56,8 +56,17 @@ export default function SignInPage() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
-  // Legal acceptance state. We collect on the email-entry screen and store
-  // server-side after authentication completes. Three checkboxes:
+  // Two tabs at the top of the form:
+  //   sign_in        → returning users; no legal checkboxes shown
+  //   create_account → new users; must accept ToS/Privacy/parental consent
+  // Both paths call signInWithOtp with shouldCreateUser: true. The difference
+  // is purely UI framing: which field-set is shown, what the button says,
+  // and what client-side validation requires. The auth flow is identical.
+  //
+  // Default: 'sign_in'. New users tap the Create Account tab to switch.
+  const [mode, setMode] = useState<'sign_in' | 'create_account'>('sign_in');
+
+  // Legal acceptance state. Only meaningful in create_account mode.
   //   - termsAccepted: ToS + AUP (combined since AUP is part of ToS)
   //   - privacyAcknowledged: Privacy Policy
   //   - parentalConsent: only required if user indicates they're under 18
@@ -109,14 +118,20 @@ export default function SignInPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    // Stash the parental-consent attestation so we can record it after the
-    // user completes auth. Survives the magic-link round trip and OTP path.
-    try {
-      sessionStorage.setItem(
-        'pungctual:pending-acceptance',
-        JSON.stringify({ parentalConsent: underAge ? parentalConsent : true })
-      );
-    } catch { /* sessionStorage might be unavailable; not fatal */ }
+    // Only stash pending-acceptance for new users. Returning users already
+    // have legal acceptance records — LegalGate will see them and let them
+    // through without re-prompting.
+    if (mode === 'create_account') {
+      try {
+        sessionStorage.setItem(
+          'pungctual:pending-acceptance',
+          JSON.stringify({ parentalConsent: underAge ? parentalConsent : true })
+        );
+      } catch { /* sessionStorage might be unavailable; not fatal */ }
+    } else {
+      // Clear any stale acceptance from a previous Create Account attempt
+      try { sessionStorage.removeItem('pungctual:pending-acceptance'); } catch {}
+    }
     const supabase = getBrowserSupabase();
     // Pass `next` through to the callback so post-sign-in we land on the
     // requested destination (e.g. an invite acceptance page).
@@ -180,108 +195,170 @@ export default function SignInPage() {
       )}
       <header className="mb-10">
         <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-4">Enter the Parlor</p>
-        <h1 className="font-display text-5xl">Sign In</h1>
+        <h1 className="font-display text-5xl">
+          {mode === 'sign_in' ? 'Sign In' : 'Create Account'}
+        </h1>
         <p className="mt-3 text-ink/60 italic font-display">
-          {isPwa
-            ? 'A code will arrive in your inbox.'
-            : 'Or create an account. A link will arrive in your inbox.'}
+          {mode === 'sign_in'
+            ? (isPwa ? 'A code will arrive in your inbox.' : 'A link will arrive in your inbox.')
+            : (isPwa ? 'A code will arrive in your inbox.' : 'A link will arrive in your inbox.')}
         </p>
       </header>
 
       {phase === 'email' && (
-        <form onSubmit={sendLink} className="tile-border p-7 space-y-5">
-          <div>
-            <label className="label">Email</label>
-            <input
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
-            />
-            <p className="mt-2 text-xs text-ink/40 italic">
-              New here? Just enter your email — we'll create your account when you sign in.
-            </p>
+        <div className="space-y-4">
+          {/* Tab toggle: Sign In / Create Account */}
+          <div className="grid grid-cols-2 gap-0 border border-ink/15">
+            <button
+              type="button"
+              onClick={() => setMode('sign_in')}
+              className={`py-3 px-4 text-xs tracking-[0.2em] uppercase transition-colors ${
+                mode === 'sign_in'
+                  ? 'bg-jade text-bone'
+                  : 'bg-bone text-ink/60 hover:bg-ink/5'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('create_account')}
+              className={`py-3 px-4 text-xs tracking-[0.2em] uppercase transition-colors ${
+                mode === 'create_account'
+                  ? 'bg-jade text-bone'
+                  : 'bg-bone text-ink/60 hover:bg-ink/5'
+              }`}
+            >
+              Create Account
+            </button>
           </div>
 
-          {/* Legal acceptance — required for all users on every sign-in.
-              Re-ticking on each sign-in is intentional: it reinforces awareness
-              that the user is opting into specific documents. recordLegalAcceptance
-              is a no-op (upsert) for users who've already accepted the current version. */}
-          <div className="border-t border-ink/10 pt-5 space-y-3">
-            <label className="flex items-start gap-3 cursor-pointer text-sm">
+          <form onSubmit={sendLink} className="tile-border p-7 space-y-5">
+            <div>
+              <label className="label">Email</label>
               <input
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                type="email"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
                 required
               />
-              <span className="text-ink/80">
-                I agree to the{' '}
-                <Link href="/terms" target="_blank" className="text-jade underline">Terms of Service</Link>
-                {' '}and{' '}
-                <Link href="/acceptable-use" target="_blank" className="text-jade underline">Acceptable Use Policy</Link>.
-              </span>
-            </label>
-            <label className="flex items-start gap-3 cursor-pointer text-sm">
-              <input
-                type="checkbox"
-                checked={privacyAcknowledged}
-                onChange={(e) => setPrivacyAcknowledged(e.target.checked)}
-                className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
-                required
-              />
-              <span className="text-ink/80">
-                I have read the{' '}
-                <Link href="/privacy" target="_blank" className="text-jade underline">Privacy Policy</Link>.
-              </span>
-            </label>
-            <label className="flex items-start gap-3 cursor-pointer text-sm">
-              <input
-                type="checkbox"
-                checked={underAge}
-                onChange={(e) => { setUnderAge(e.target.checked); if (!e.target.checked) setParentalConsent(false); }}
-                className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
-              />
-              <span className="text-ink/80">
-                I am under 18 years old.
-              </span>
-            </label>
-            {underAge && (
-              <label className="flex items-start gap-3 cursor-pointer text-sm ml-7 pl-1 border-l-2 border-cinnabar/30 -mt-1 pl-3">
-                <input
-                  type="checkbox"
-                  checked={parentalConsent}
-                  onChange={(e) => setParentalConsent(e.target.checked)}
-                  className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
-                  required={underAge}
-                />
-                <span className="text-ink/80">
-                  My parent or legal guardian has read these documents and consents to my use of Pungctual.
-                </span>
-              </label>
+              {mode === 'create_account' && (
+                <p className="mt-2 text-xs text-ink/40 italic">
+                  We&apos;ll create your account when you confirm your email.
+                </p>
+              )}
+            </div>
+
+            {/* Legal acceptance — only shown for new users creating an account.
+                Returning users already have acceptance records and don't need
+                to re-tick on every sign-in. */}
+            {mode === 'create_account' && (
+              <div className="border-t border-ink/10 pt-5 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                    required
+                  />
+                  <span className="text-ink/80">
+                    I agree to the{' '}
+                    <Link href="/terms" target="_blank" className="text-jade underline">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link href="/acceptable-use" target="_blank" className="text-jade underline">Acceptable Use Policy</Link>.
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={privacyAcknowledged}
+                    onChange={(e) => setPrivacyAcknowledged(e.target.checked)}
+                    className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                    required
+                  />
+                  <span className="text-ink/80">
+                    I have read the{' '}
+                    <Link href="/privacy" target="_blank" className="text-jade underline">Privacy Policy</Link>.
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={underAge}
+                    onChange={(e) => { setUnderAge(e.target.checked); if (!e.target.checked) setParentalConsent(false); }}
+                    className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                  />
+                  <span className="text-ink/80">
+                    I am under 18 years old.
+                  </span>
+                </label>
+                {underAge && (
+                  <label className="flex items-start gap-3 cursor-pointer text-sm ml-7 pl-1 border-l-2 border-cinnabar/30 -mt-1 pl-3">
+                    <input
+                      type="checkbox"
+                      checked={parentalConsent}
+                      onChange={(e) => setParentalConsent(e.target.checked)}
+                      className="accent-jade w-4 h-4 mt-0.5 flex-shrink-0"
+                      required={underAge}
+                    />
+                    <span className="text-ink/80">
+                      My parent or legal guardian has read these documents and consents to my use of Pungctual.
+                    </span>
+                  </label>
+                )}
+                <p className="text-[11px] text-ink/40 italic pt-1">
+                  You must be at least 13 years old to use Pungctual.
+                </p>
+              </div>
             )}
-            <p className="text-[11px] text-ink/40 italic pt-1">
-              You must be at least 13 years old to use Pungctual.
-            </p>
-          </div>
 
-          {error && <p className="text-cinnabar text-sm">{error}</p>}
-          <button
-            className="btn btn-jade w-full justify-center"
-            disabled={
-              busy ||
-              !termsAccepted ||
-              !privacyAcknowledged ||
-              (underAge && !parentalConsent)
-            }
-          >
-            {busy ? 'Sending…' : 'Send Sign-In Email'}
-          </button>
-        </form>
+            {error && <p className="text-cinnabar text-sm">{error}</p>}
+            <button
+              className="btn btn-jade w-full justify-center"
+              disabled={
+                busy ||
+                (mode === 'create_account' && (
+                  !termsAccepted ||
+                  !privacyAcknowledged ||
+                  (underAge && !parentalConsent)
+                ))
+              }
+            >
+              {busy
+                ? 'Sending…'
+                : (mode === 'sign_in' ? 'Send Sign-In Email' : 'Create Account')}
+            </button>
+          </form>
+
+          {/* Cross-tab nudge for users who tap the wrong one */}
+          <p className="text-xs text-ink/40 italic text-center">
+            {mode === 'sign_in' ? (
+              <>New here?{' '}
+                <button
+                  type="button"
+                  onClick={() => setMode('create_account')}
+                  className="text-jade underline hover:text-cinnabar"
+                >
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => setMode('sign_in')}
+                  className="text-jade underline hover:text-cinnabar"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
+          </p>
+        </div>
       )}
 
       {phase === 'sent' && isPwa === true && (
