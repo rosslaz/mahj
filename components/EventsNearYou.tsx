@@ -48,6 +48,13 @@ export default function EventsNearYou() {
         const { findNearbyEvents } = await import('@/app/actions/discovery');
         const res = await findNearbyEvents({ maxMiles, type });
         if (cancelled) return;
+        if (!res) {
+          // Server action returned undefined — usually means it threw an
+          // uncaught error mid-flight. The new try/catch in discovery.ts
+          // should prevent this, but defense in depth.
+          setState({ kind: 'error', message: 'No response from server. Try again.' });
+          return;
+        }
         if (!res.ok) {
           if (res.error === 'NO_ZIP') setState({ kind: 'no-zip' });
           else if (res.error === 'ZIP_NOT_FOUND') setState({ kind: 'zip-not-found' });
