@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { sendPushToUser } from '@/lib/push-server';
 
 type SerializedSubscription = {
@@ -11,11 +11,12 @@ type SerializedSubscription = {
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
-async function getCallerId(): Promise<string | null> {
-  const supabase = getSupabase();
-  const { data } = await supabase.from('users').select('id').limit(1).maybeSingle();
-  return (data as any)?.id ?? null;
-}
+// Note: getCallerUserId is imported from lib/supabase rather than defined
+// locally. Earlier versions of this file had a local helper that did a
+// `from('users').select('id').limit(1).maybeSingle()` without a WHERE clause
+// — which returned the WRONG users row when the caller had co-members
+// visible through RLS, causing subscriptions to be registered against the
+// wrong user. The shared helper filters explicitly by auth.uid().
 
 /**
  * Store a push subscription. Idempotent on (user_id, endpoint).
@@ -25,12 +26,17 @@ export async function registerPushSubscription(sub: SerializedSubscription): Pro
     return { ok: false, error: 'Invalid subscription payload.' };
   }
   const supabase = getSupabase();
-  const userId = await getCallerId();
+  const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
   // Upsert: if the same (user_id, endpoint) exists, update the keys + ua.
   // Browsers occasionally rotate the auth secret; we should accept the new one.
-  const { error } = await supabase
+  //
+  // We `.select()` the upserted row so RLS rejections don't silently look
+  // like success — when PostgREST upserts a row blocked by RLS, the error
+  // can come back null but the result set is empty. By requesting the row
+  // back and verifying we got it, we catch this case explicitly.
+  const { data: upserted, error } = await supabase
     .from('push_subscriptions')
     .upsert(
       {
@@ -42,8 +48,11 @@ export async function registerPushSubscription(sub: SerializedSubscription): Pro
         last_used_at: new Date().toISOString(),
       },
       { onConflict: 'user_id,endpoint' }
-    );
+    )
+    .select('id')
+    .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (!upserted) return { ok: false, error: 'Subscription was not saved (likely a permissions issue). Try signing out and back in.' };
 
   // Ensure a prefs row exists (defaults to all categories on).
   await supabase
@@ -60,7 +69,7 @@ export async function registerPushSubscription(sub: SerializedSubscription): Pro
 export async function unregisterPushSubscription(endpoint: string): Promise<Result> {
   if (!endpoint) return { ok: false, error: 'Missing endpoint.' };
   const supabase = getSupabase();
-  const userId = await getCallerId();
+  const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
   const { error } = await supabase
     .from('push_subscriptions')
@@ -76,7 +85,7 @@ export async function unregisterPushSubscription(endpoint: string): Promise<Resu
  * Used by the "Send test notification" button in the profile UI.
  */
 export async function sendTestPush(): Promise<Result<{ delivered: number; attempted: number }>> {
-  const userId = await getCallerId();
+  const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
   try {
     const res = await sendPushToUser(userId, {
@@ -108,7 +117,7 @@ type Prefs = {
  */
 export async function updateNotificationPreferences(prefs: Partial<Prefs>): Promise<Result> {
   const supabase = getSupabase();
-  const userId = await getCallerId();
+  const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
   const { error } = await supabase

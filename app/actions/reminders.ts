@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { dispatchEventReminder } from '@/lib/notifications';
 
 type Result =
@@ -20,8 +20,7 @@ type Result =
 export async function sendEventReminderNow(eventId: string): Promise<Result> {
   const supabase = getSupabase();
   // Authz: must be host of this event OR a club admin
-  const { data: userRow } = await supabase.from('users').select('id').limit(1).maybeSingle();
-  const callerId = (userRow as any)?.id;
+  const callerId = await getCallerUserId();
   if (!callerId) return { ok: false, error: 'Not signed in.' };
 
   const { data: event } = await supabase

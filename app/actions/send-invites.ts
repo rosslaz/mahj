@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { buildICalendar, parseLocalDateTime, addLocalHours, type ICalAttendee } from '@/lib/ics';
 import { formatAddressLines } from '@/lib/address';
 
@@ -55,9 +55,7 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
 
   // Verify caller is host or club admin (server-side check, even though RLS
   // would prevent the writes anyway — better error messages this way).
-  const { data: userRow } = await supabase
-    .from('users').select('id').limit(1).maybeSingle();
-  const callerId: string | undefined = (userRow as any)?.id;
+  const callerId = await getCallerUserId();
   if (!callerId) return { ok: false, error: 'Not signed in.' };
 
   const isHost = (eventData as any).host_player_id === callerId;

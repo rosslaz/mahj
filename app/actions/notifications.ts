@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabase } from '@/lib/supabase';
+import { getCallerUserId } from '@/lib/supabase';
 import {
   dispatchSignupCreated,
   dispatchSignupWithdrawn,
@@ -11,12 +11,11 @@ import {
   dispatchClubMemberLeft,
 } from '@/lib/notifications';
 
-// Resolves the calling user's users.id (NOT auth.uid). Returns null if not signed in.
-async function getCallerId(): Promise<string | null> {
-  const supabase = getSupabase();
-  const { data } = await supabase.from('users').select('id').limit(1).maybeSingle();
-  return (data as any)?.id ?? null;
-}
+// Each notify* function resolves the caller's users.id and delegates to the
+// appropriate dispatcher in lib/notifications. We use the shared
+// getCallerUserId helper which filters by auth.uid() explicitly — a previous
+// version that relied on RLS-only filtering returned the wrong user's row
+// when co-members were visible through RLS.
 
 // All of these return void — the client doesn't need a response. Errors are
 // already swallowed inside the dispatcher level (notification failures
@@ -26,7 +25,7 @@ async function getCallerId(): Promise<string | null> {
  * Call after creating a night_signups row. Notifies the host.
  */
 export async function notifySignupCreated(signupId: string, status: 'approved' | 'pending'): Promise<void> {
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchSignupCreated({ signupId, actorUserId, status });
@@ -41,7 +40,7 @@ export async function notifySignupCreated(signupId: string, status: 'approved' |
  * row is already gone by the time we call this).
  */
 export async function notifySignupWithdrawn(eventId: string, withdrawnUserId: string): Promise<void> {
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchSignupWithdrawn({ eventId, withdrawnUserId, actorUserId });
@@ -54,7 +53,7 @@ export async function notifySignupWithdrawn(eventId: string, withdrawnUserId: st
  * Call after host approves a pending signup. Notifies the approved player.
  */
 export async function notifySignupApproved(signupId: string): Promise<void> {
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchSignupApproved({ signupId, actorUserId });
@@ -67,7 +66,7 @@ export async function notifySignupApproved(signupId: string): Promise<void> {
  * Call after host removes a player from the event (the × on a player chip).
  */
 export async function notifyPlayerRemoved(eventId: string, removedUserId: string): Promise<void> {
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchPlayerRemovedByHost({ eventId, removedUserId, actorUserId });
@@ -80,7 +79,7 @@ export async function notifyPlayerRemoved(eventId: string, removedUserId: string
  * Call after host adds a player to the event (+ Add player flow).
  */
 export async function notifyPlayerAdded(eventId: string, addedUserId: string): Promise<void> {
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchPlayerAddedByHost({ eventId, addedUserId, actorUserId });
@@ -95,7 +94,7 @@ export async function notifyPlayerAdded(eventId: string, addedUserId: string): P
 export async function notifyClubMemberJoined(clubId: string, newMemberUserId: string): Promise<void> {
   // Caller's identity is irrelevant for this one — the new member's identity
   // is the trigger. Still, verify they're authenticated.
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchClubMemberJoined({ clubId, newMemberUserId });
@@ -109,7 +108,7 @@ export async function notifyClubMemberJoined(clubId: string, newMemberUserId: st
  * decides whether to notify based on actor vs. left user.
  */
 export async function notifyClubMemberLeft(clubId: string, leftUserId: string): Promise<void> {
-  const actorUserId = await getCallerId();
+  const actorUserId = await getCallerUserId();
   if (!actorUserId) return;
   try {
     await dispatchClubMemberLeft({ clubId, leftUserId, actorUserId });
