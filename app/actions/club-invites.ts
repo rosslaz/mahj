@@ -3,6 +3,7 @@
 import { randomBytes } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
+import { dispatchClubMemberJoined } from '@/lib/notifications';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -263,7 +264,7 @@ export async function acceptClubInvite(token: string): Promise<Result<AcceptResu
   // Look up the invite by token. No RLS via service role.
   const { data: inviteRow } = await serviceClient
     .from('club_invites')
-    .select('id, club_id, status, expires_at, accepted_by_user_id')
+    .select('id, club_id, status, expires_at, accepted_by_user_id, auto_accept_event_id')
     .eq('token', token)
     .maybeSingle();
 
@@ -333,13 +334,55 @@ export async function acceptClubInvite(token: string): Promise<Result<AcceptResu
     })
     .eq('id', invite.id);
 
-  // Notify club admins of the new member (existing dispatcher)
+  // Notify club admins of the new member
   if (!alreadyMember) {
     try {
-      const { dispatchClubMemberJoined } = await import('@/lib/notifications');
       await dispatchClubMemberJoined({ clubId: invite.club_id, newMemberUserId: userId });
     } catch (e) {
       console.error('[acceptClubInvite] notification failed:', e);
+    }
+  }
+
+  // If this invite was tied to a hidden event, chain the event acceptance:
+  // create an accepted event_invite + approved night_signup. Best-effort —
+  // if any of this fails, the user is still in the club; they can find the
+  // event manually if they know about it.
+  if (invite.auto_accept_event_id) {
+    try {
+      // Verify the event still exists and isn't deleted
+      const { data: eventRow } = await serviceClient
+        .from('events')
+        .select('id, club_id')
+        .eq('id', invite.auto_accept_event_id)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (eventRow) {
+        // Upsert event_invite (status=accepted). The unique constraint on
+        // (event_id, invitee_user_id) means re-clicking the link is fine.
+        await serviceClient.from('event_invites').upsert(
+          {
+            event_id: invite.auto_accept_event_id,
+            invitee_user_id: userId,
+            invited_by_user_id: null,  // came via email — original inviter recorded in club_invites
+            status: 'accepted',
+            responded_at: new Date().toISOString(),
+          },
+          { onConflict: 'event_id,invitee_user_id', ignoreDuplicates: false }
+        );
+
+        // Upsert an approved signup
+        await serviceClient.from('night_signups').upsert(
+          {
+            event_id: invite.auto_accept_event_id,
+            player_id: userId,
+            club_id: (eventRow as any).club_id,
+            status: 'approved',
+          },
+          { onConflict: 'event_id,player_id', ignoreDuplicates: false }
+        );
+      }
+    } catch (e) {
+      console.error('[acceptClubInvite] auto-accept event failed:', e);
     }
   }
 

@@ -10,6 +10,7 @@ import { useActivity } from '@/lib/use-activity';
 import { formatTime12 } from '@/lib/game-utils';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
+import { sendEventInvitations } from '@/app/actions/event-invites';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
 
@@ -70,6 +71,13 @@ export default function ActivityEventsPage() {
   const [addr, setAddr] = useState<AddressFieldsValue>(EMPTY_ADDR);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Hidden-event state. Only meaningful when admin/owner creating a single
+  // night (not a series — series with hidden visibility is too complex for v1).
+  const [visibility, setVisibility] = useState<'normal' | 'hidden'>('normal');
+  const [invitedMemberIds, setInvitedMemberIds] = useState<Set<string>>(new Set());
+  const [outsideEmailsText, setOutsideEmailsText] = useState('');
+  const [welcomeMessage, setWelcomeMessage] = useState('');
 
   // Series form state
   const [sName, setSName] = useState('');
@@ -277,6 +285,7 @@ export default function ActivityEventsPage() {
           city: addr.city.trim() || null,
           state: addr.state || null,
           zip: addr.zip.trim() || null,
+          visibility,
         })
         .select()
         .single();
@@ -290,6 +299,29 @@ export default function ActivityEventsPage() {
       }));
       const { error: tablesErr } = await supabase.from('tables').insert(tablesPayload);
       if (tablesErr) throw new Error(tablesErr.message);
+
+      // If this is a hidden event, send invitations now.
+      // Member invites + outside email invites.
+      if (visibility === 'hidden') {
+        const outsideEmails = outsideEmailsText
+          .split(/[\s,;]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const memberIds = Array.from(invitedMemberIds);
+        if (memberIds.length > 0 || outsideEmails.length > 0) {
+          const res = await sendEventInvitations({
+            eventId: (nightData as any).id,
+            memberUserIds: memberIds,
+            outsideEmails,
+            welcomeMessage: welcomeMessage.trim() || undefined,
+          });
+          if (res && !res.ok) {
+            // Event was created; invitations partially failed. Don't block
+            // the redirect, but surface the error.
+            console.error('[createNight] invitation send failed:', res.error);
+          }
+        }
+      }
 
       router.push(`${eventBasePath}/${(nightData as any).id}`);
     } catch (err: any) {
@@ -446,6 +478,105 @@ export default function ActivityEventsPage() {
                 }
               />
             </div>
+
+            {/* Visibility — only admins/owners can create hidden events.
+                Members can create normal events only. */}
+            {(cb.isAdmin || cb.isOwner) && (
+              <div className="md:col-span-2 border-t border-ink/10 pt-5">
+                <label className="label">Visibility</label>
+                <div className="grid grid-cols-2 gap-3 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setVisibility('normal')}
+                    className={`p-3 border text-left transition-colors ${
+                      visibility === 'normal'
+                        ? 'border-jade bg-jade/5'
+                        : 'border-ink/15 hover:border-jade/40'
+                    }`}
+                  >
+                    <div className="text-sm font-medium">Normal</div>
+                    <div className="text-xs text-ink/50 italic">Visible to all club members.</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibility('hidden')}
+                    className={`p-3 border text-left transition-colors ${
+                      visibility === 'hidden'
+                        ? 'border-cinnabar bg-cinnabar/5'
+                        : 'border-ink/15 hover:border-cinnabar/40'
+                    }`}
+                  >
+                    <div className="text-sm font-medium">Hidden</div>
+                    <div className="text-xs text-ink/50 italic">Invite-only. Hidden from others.</div>
+                  </button>
+                </div>
+
+                {visibility === 'hidden' && (
+                  <div className="mt-5 space-y-5 pl-4 border-l-2 border-cinnabar/30">
+                    <div>
+                      <label className="label">Invite club members</label>
+                      <p className="text-xs text-ink/40 italic mb-2">
+                        {invitedMemberIds.size === 0
+                          ? 'Select members to invite.'
+                          : `${invitedMemberIds.size} selected`}
+                      </p>
+                      {members.length === 0 ? (
+                        <p className="text-xs text-ink/50 italic">No members to invite yet.</p>
+                      ) : (
+                        <div className="max-h-48 overflow-y-auto border border-ink/15 p-2 space-y-1">
+                          {members.map((m) => (
+                            <label key={m.user_id} className="flex items-center gap-2 cursor-pointer hover:bg-ink/5 px-2 py-1 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={invitedMemberIds.has(m.user_id)}
+                                onChange={(e) => {
+                                  setInvitedMemberIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(m.user_id);
+                                    else next.delete(m.user_id);
+                                    return next;
+                                  });
+                                }}
+                                className="accent-jade w-4 h-4"
+                              />
+                              <span>{m.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="label">
+                        Invite outside guests <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                      </label>
+                      <textarea
+                        className="input min-h-[60px] font-mono text-sm"
+                        value={outsideEmailsText}
+                        onChange={(e) => setOutsideEmailsText(e.target.value)}
+                        placeholder="sarah@example.com&#10;tom@example.com"
+                      />
+                      <p className="text-xs text-ink/40 italic mt-1">
+                        Email addresses, one per line. They&apos;ll be invited to join the club AND this event in one step. Max 20.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="label">
+                        Welcome message <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                      </label>
+                      <textarea
+                        className="input min-h-[60px]"
+                        value={welcomeMessage}
+                        onChange={(e) => setWelcomeMessage(e.target.value)}
+                        placeholder="A personal note included in the invitation email."
+                        maxLength={2000}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {formError && <p className="text-cinnabar text-sm">{formError}</p>}
           <div className="flex gap-3 pt-2">

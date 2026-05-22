@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
@@ -20,6 +20,12 @@ import {
 } from '@/app/actions/notifications';
 import { sendEventReminderNow } from '@/app/actions/reminders';
 import { sendCalendarInvites } from '@/app/actions/send-invites';
+import {
+  sendEventInvitations,
+  acceptEventInvitation,
+  declineEventInvitation,
+  cancelEventInvitation,
+} from '@/app/actions/event-invites';
 
 type Night = {
   id: string;
@@ -35,6 +41,15 @@ type Night = {
   num_tables: number;
   games_planned: number;
   status: string;
+  visibility: 'normal' | 'hidden';
+};
+type EventInvite = {
+  id: string;
+  invitee_user_id: string;
+  invitee_name: string | null;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  responded_at: string | null;
 };
 type Member = {
   user_id: string;
@@ -53,6 +68,7 @@ type GPW = { game_id: string; player_id: string; wind: Wind | null; is_sitting_o
 
 export default function EventDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const clubSlug = params.slug as string;
   const activitySlug = params.activitySlug as string;
   const id = params.id as string;
@@ -83,22 +99,53 @@ export default function EventDetailPage() {
   // Spinner state for the "Send reminder" button. Toast also reuses inviteToast.
   const [sendingReminder, setSendingReminder] = useState(false);
 
+  // Event invitations (for hidden events). Loaded for everyone but the UI
+  // only acts on them when relevant (banner for pending invitees; manage
+  // section for admins/host).
+  const [eventInvites, setEventInvites] = useState<EventInvite[]>([]);
+  // Spinner states for invitation actions
+  const [respondingToInvite, setRespondingToInvite] = useState(false);
+  const [inviteActionError, setInviteActionError] = useState<string | null>(null);
+  // Manage-invitations UI state (admins/host)
+  const [showAddInvitesPanel, setShowAddInvitesPanel] = useState(false);
+  const [addInviteMemberIds, setAddInviteMemberIds] = useState<Set<string>>(new Set());
+  const [addInviteEmails, setAddInviteEmails] = useState('');
+  const [addInviteWelcome, setAddInviteWelcome] = useState('');
+  const [sendingMoreInvites, setSendingMoreInvites] = useState(false);
+
   const load = useCallback(async () => {
     if (!cb.club) return;
     setLoading(true);
 
-    const [nightRes, tablesRes, signupsRes, membersRes] = await Promise.all([
+    const [nightRes, tablesRes, signupsRes, membersRes, invitesRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).eq('club_id', cb.club.id).single(),
       supabase.from('tables').select('*').eq('event_id', id).order('table_number'),
       supabase.from('night_signups').select('id, player_id, status, created_at, invited_at').eq('event_id', id),
       supabase.from('club_members')
         .select('user_id, user:user_id(name, street, city, state, zip, deleted_at)')
         .eq('club_id', cb.club.id),
+      // event_invites with the invitee's name joined in. RLS hides invites
+      // the caller can't see (non-admin non-invitee members see nothing).
+      supabase.from('event_invites')
+        .select('id, invitee_user_id, status, created_at, responded_at, invitee:invitee_user_id(name)')
+        .eq('event_id', id)
+        .order('created_at', { ascending: true }),
     ]);
 
     setNight(nightRes.data as unknown as Night);
     setTables((tablesRes.data as Table[]) || []);
     setSignups((signupsRes.data as Signup[]) || []);
+
+    // Map invitee_user_id → name from join; keep the rest as-is
+    const invitesData: EventInvite[] = ((invitesRes.data as any[]) || []).map((r) => ({
+      id: r.id,
+      invitee_user_id: r.invitee_user_id,
+      invitee_name: r.invitee?.name ?? null,
+      status: r.status,
+      created_at: r.created_at,
+      responded_at: r.responded_at,
+    }));
+    setEventInvites(invitesData);
 
     const mList: Member[] = ((membersRes.data as any[]) || [])
       .filter((m) => m.user && !m.user.deleted_at)
@@ -179,6 +226,18 @@ export default function EventDetailPage() {
   const userApproved = !!auth.userId && approvedIds.has(auth.userId);
   const userPending = !!auth.userId && pendingSignups.some((s) => s.player_id === auth.userId);
   const userSignedUp = userApproved || userPending;
+
+  // Event-invitation derived state. The user's own invitation, if any.
+  // Pending = banner shown; accepted = treated as a regular signup; declined
+  // = the page wouldn't have loaded for them via RLS (filtered out).
+  const myInvite = auth.userId ? eventInvites.find((i) => i.invitee_user_id === auth.userId) : undefined;
+  const isPendingInvitee = myInvite?.status === 'pending';
+  const isHiddenEvent = night.visibility === 'hidden';
+
+  // Sort invites for the admin "Manage invitations" panel.
+  const pendingInvitesList = eventInvites.filter((i) => i.status === 'pending');
+  const acceptedInvitesList = eventInvites.filter((i) => i.status === 'accepted');
+  const declinedInvitesList = eventInvites.filter((i) => i.status === 'declined');
 
   // Is this a public event? (Activity AND club both public.)
   // The activity is public iff act.activity.is_public; the club is public
@@ -314,6 +373,99 @@ export default function EventDetailPage() {
       alert(e?.message ?? 'Reminder failed.');
     } finally {
       setSendingReminder(false);
+    }
+  }
+
+  // -------- Event invitation handlers --------
+
+  async function handleAcceptInvite() {
+    if (respondingToInvite) return;
+    setInviteActionError(null);
+    setRespondingToInvite(true);
+    try {
+      const res = await acceptEventInvitation(id);
+      if (!res.ok) {
+        setInviteActionError(res.error);
+        return;
+      }
+      // Refetch to pick up the new signup row + invite status
+      await load();
+      setInviteToast(`You're in for "${night?.name}" ✓`);
+    } catch (e: any) {
+      setInviteActionError(e?.message || 'Failed to accept invitation.');
+    } finally {
+      setRespondingToInvite(false);
+    }
+  }
+
+  async function handleDeclineInvite() {
+    if (respondingToInvite) return;
+    if (!confirm(`Decline the invitation to "${night?.name}"? This event will disappear from your view.`)) return;
+    setInviteActionError(null);
+    setRespondingToInvite(true);
+    try {
+      const res = await declineEventInvitation(id);
+      if (!res.ok) {
+        setInviteActionError(res.error);
+        setRespondingToInvite(false);
+        return;
+      }
+      // Event becomes invisible to us — redirect home
+      router.push('/');
+    } catch (e: any) {
+      setInviteActionError(e?.message || 'Failed to decline invitation.');
+      setRespondingToInvite(false);
+    }
+  }
+
+  async function handleCancelInvite(inviteId: string, name: string | null) {
+    if (!confirm(`Cancel invitation${name ? ` to ${name}` : ''}?`)) return;
+    const res = await cancelEventInvitation(inviteId);
+    if (!res.ok) {
+      alert(res.error);
+      return;
+    }
+    await load();
+  }
+
+  async function handleSendMoreInvites() {
+    if (sendingMoreInvites) return;
+    const memberIds = Array.from(addInviteMemberIds);
+    const outsideEmails = addInviteEmails
+      .split(/[\s,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (memberIds.length === 0 && outsideEmails.length === 0) {
+      alert('Pick at least one member or enter at least one email.');
+      return;
+    }
+    setSendingMoreInvites(true);
+    try {
+      const res = await sendEventInvitations({
+        eventId: id,
+        memberUserIds: memberIds,
+        outsideEmails,
+        welcomeMessage: addInviteWelcome.trim() || undefined,
+      });
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      const data = res.data!;
+      const parts: string[] = [];
+      if (data.membersInvited > 0) parts.push(`${data.membersInvited} member${data.membersInvited === 1 ? '' : 's'}`);
+      if (data.outsideEmailsSent > 0) parts.push(`${data.outsideEmailsSent} outside email${data.outsideEmailsSent === 1 ? '' : 's'}`);
+      setInviteToast(parts.length > 0 ? `Invited ${parts.join(' + ')} ✓` : 'No new invitations sent.');
+      // Reset the form + reload
+      setAddInviteMemberIds(new Set());
+      setAddInviteEmails('');
+      setAddInviteWelcome('');
+      setShowAddInvitesPanel(false);
+      await load();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to send invitations.');
+    } finally {
+      setSendingMoreInvites(false);
     }
   }
 
@@ -503,6 +655,11 @@ export default function EventDetailPage() {
           <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mt-4 mb-2">
             {new Date(night.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             {night.start_time && <span className="ml-2">· {formatTime12(night.start_time)}</span>}
+            {isHiddenEvent && (
+              <span className="ml-3 inline-block px-2 py-0.5 bg-cinnabar/10 text-cinnabar border border-cinnabar/30 normal-case tracking-[0.15em]">
+                Hidden
+              </span>
+            )}
           </p>
           <h1 className="font-display text-5xl md:text-6xl">{night.name}</h1>
           <div className="mt-4 text-ink/60 space-y-1">
@@ -536,6 +693,37 @@ export default function EventDetailPage() {
           {canManage && night.status === 'completed' && <button onClick={reopenNight} className="btn btn-ghost">Reopen</button>}
         </div>
       </header>
+
+      {/* INVITATION BANNER — shown to a pending invitee. Big and prominent
+          so it's the first thing they see. Hidden once they accept or decline. */}
+      {isPendingInvitee && (
+        <section className="tile-border p-6 md:p-8 bg-cinnabar/5 border-cinnabar/40">
+          <p className="text-xs tracking-[0.3em] uppercase text-cinnabar mb-2">You&apos;re invited</p>
+          <h2 className="font-display text-2xl md:text-3xl mb-3">Will you join us?</h2>
+          <p className="text-sm text-ink/70 mb-5">
+            You&apos;ve been invited to this event. Accept to confirm your attendance, or decline to remove it from your view.
+          </p>
+          {inviteActionError && (
+            <p className="text-cinnabar text-sm mb-3">{inviteActionError}</p>
+          )}
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={handleAcceptInvite}
+              disabled={respondingToInvite}
+              className="btn btn-jade"
+            >
+              {respondingToInvite ? 'Working…' : 'Accept'}
+            </button>
+            <button
+              onClick={handleDeclineInvite}
+              disabled={respondingToInvite}
+              className="btn btn-ghost"
+            >
+              Decline
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* SIGNUPS */}
       <section className="tile-border p-6 md:p-8">
@@ -673,6 +861,167 @@ export default function EventDetailPage() {
           </div>
         )}
       </section>
+
+      {/* MANAGE INVITATIONS — admin/host only, only shown on hidden events.
+          Lists pending/accepted/declined invitees, lets admin cancel pendings
+          and add more invitations.
+
+          For non-hidden events, this section isn't shown (not needed). */}
+      {canManage && isHiddenEvent && (
+        <section className="tile-border p-6 md:p-8">
+          <div className="flex items-baseline justify-between mb-5 flex-wrap gap-3">
+            <div>
+              <h2 className="font-display text-3xl">Invitations</h2>
+              <p className="text-sm text-ink/50 italic mt-1">
+                {pendingInvitesList.length} pending · {acceptedInvitesList.length} accepted
+                {declinedInvitesList.length > 0 && <> · {declinedInvitesList.length} declined</>}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddInvitesPanel((v) => !v)}
+              className="btn btn-ghost text-xs"
+            >
+              {showAddInvitesPanel ? 'Close' : '+ Invite more'}
+            </button>
+          </div>
+
+          {/* Add more invitations panel */}
+          {showAddInvitesPanel && (
+            <div className="border border-ink/15 p-4 mb-5 space-y-4 bg-bone">
+              <div>
+                <label className="label">Invite club members</label>
+                <p className="text-xs text-ink/40 italic mb-2">
+                  {addInviteMemberIds.size === 0
+                    ? 'Select members not yet invited.'
+                    : `${addInviteMemberIds.size} selected`}
+                </p>
+                {(() => {
+                  // Filter out members who already have an invite or are signed up
+                  const alreadyInvitedIds = new Set(eventInvites.map((i) => i.invitee_user_id));
+                  const eligibleMembers = members.filter((m) =>
+                    !alreadyInvitedIds.has(m.user_id) && !approvedIds.has(m.user_id)
+                  );
+                  if (eligibleMembers.length === 0) {
+                    return <p className="text-xs text-ink/50 italic">All club members are already invited or signed up.</p>;
+                  }
+                  return (
+                    <div className="max-h-48 overflow-y-auto border border-ink/15 p-2 space-y-1">
+                      {eligibleMembers.map((m) => (
+                        <label key={m.user_id} className="flex items-center gap-2 cursor-pointer hover:bg-ink/5 px-2 py-1 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={addInviteMemberIds.has(m.user_id)}
+                            onChange={(e) => {
+                              setAddInviteMemberIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(m.user_id);
+                                else next.delete(m.user_id);
+                                return next;
+                              });
+                            }}
+                            className="accent-jade w-4 h-4"
+                          />
+                          <span>{m.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="label">
+                  Outside guests <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                </label>
+                <textarea
+                  className="input min-h-[60px] font-mono text-sm"
+                  value={addInviteEmails}
+                  onChange={(e) => setAddInviteEmails(e.target.value)}
+                  placeholder="sarah@example.com&#10;tom@example.com"
+                />
+                <p className="text-xs text-ink/40 italic mt-1">
+                  Email addresses, one per line. They&apos;ll join the club + event in one click.
+                </p>
+              </div>
+
+              <div>
+                <label className="label">
+                  Welcome message <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                </label>
+                <textarea
+                  className="input min-h-[50px]"
+                  value={addInviteWelcome}
+                  onChange={(e) => setAddInviteWelcome(e.target.value)}
+                  placeholder="A note for outside guests (sent in their email)."
+                  maxLength={2000}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSendMoreInvites}
+                  disabled={sendingMoreInvites}
+                  className="btn btn-jade text-sm"
+                >
+                  {sendingMoreInvites ? 'Sending…' : 'Send invitations'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddInvitesPanel(false);
+                    setAddInviteMemberIds(new Set());
+                    setAddInviteEmails('');
+                    setAddInviteWelcome('');
+                  }}
+                  className="btn btn-ghost text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* List of current invitations */}
+          {eventInvites.length === 0 ? (
+            <p className="text-sm text-ink/50 italic">No invitations sent yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {/* Pending first */}
+              {pendingInvitesList.map((inv) => (
+                <div key={inv.id} className="flex items-center justify-between gap-3 py-2 px-3 border-b border-ink/5 last:border-0">
+                  <div className="min-w-0">
+                    <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
+                    <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar">Pending</span>
+                  </div>
+                  <button
+                    onClick={() => handleCancelInvite(inv.id, inv.invitee_name)}
+                    className="text-xs text-ink/50 hover:text-cinnabar"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ))}
+              {/* Accepted */}
+              {acceptedInvitesList.map((inv) => (
+                <div key={inv.id} className="flex items-center justify-between gap-3 py-2 px-3 border-b border-ink/5 last:border-0">
+                  <div className="min-w-0">
+                    <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
+                    <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border bg-jade/10 border-jade/40 text-jade">Accepted</span>
+                  </div>
+                </div>
+              ))}
+              {/* Declined */}
+              {declinedInvitesList.map((inv) => (
+                <div key={inv.id} className="flex items-center justify-between gap-3 py-2 px-3 border-b border-ink/5 last:border-0 opacity-60">
+                  <div className="min-w-0">
+                    <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
+                    <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border border-ink/20 text-ink/50">Declined</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {isAssigned && (
         <div className="space-y-10">

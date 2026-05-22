@@ -252,6 +252,87 @@ export async function dispatchPlayerAddedByHost(opts: {
 // ============================================================
 
 /**
+ * Someone was invited to a (typically hidden) event. Send a push so they
+ * know to respond. Bucketed under signup_activity since it's per-event.
+ */
+export async function dispatchEventInvitationReceived(opts: {
+  eventId: string;
+  inviteeUserId: string;
+}): Promise<void> {
+  const event = await loadEventContext(opts.eventId);
+  if (!event) return;
+
+  const dateStr = formatEventDateShort(event.date);
+  const url = eventUrl(event.club.slug, event.activity.slug, event.id);
+
+  await sendPushToUser(opts.inviteeUserId, {
+    title: `You're invited: ${event.name}`,
+    body: `${dateStr} — Tap to respond.`,
+    url,
+    tag: `event-invite-${event.id}-${opts.inviteeUserId}`,
+    category: 'signup_activity',
+  });
+}
+
+/**
+ * An invitee accepted an event invitation. Notify the person who sent the
+ * invitation (admin / host).
+ */
+export async function dispatchEventInvitationAccepted(opts: {
+  eventId: string;
+  inviteeUserId: string;
+  inviterUserId: string;
+}): Promise<void> {
+  // Don't notify the inviter if they invited themselves (edge case)
+  if (opts.inviteeUserId === opts.inviterUserId) return;
+
+  const event = await loadEventContext(opts.eventId);
+  if (!event) return;
+
+  const inviteeName = await getUserName(opts.inviteeUserId);
+  if (!inviteeName) return;
+
+  const url = eventUrl(event.club.slug, event.activity.slug, event.id);
+
+  await sendPushToUser(opts.inviterUserId, {
+    title: `${inviteeName} accepted`,
+    body: `They're in for ${event.name}.`,
+    url,
+    tag: `event-invite-resp-${event.id}-${opts.inviteeUserId}`,
+    category: 'signup_activity',
+  });
+}
+
+/**
+ * An invitee declined an event invitation. Notify the inviter.
+ */
+export async function dispatchEventInvitationDeclined(opts: {
+  eventId: string;
+  inviteeUserId: string;
+  inviterUserId: string;
+}): Promise<void> {
+  if (opts.inviteeUserId === opts.inviterUserId) return;
+
+  const event = await loadEventContext(opts.eventId);
+  if (!event) return;
+
+  const inviteeName = await getUserName(opts.inviteeUserId);
+  if (!inviteeName) return;
+
+  const url = eventUrl(event.club.slug, event.activity.slug, event.id);
+
+  await sendPushToUser(opts.inviterUserId, {
+    title: `${inviteeName} declined`,
+    body: `Sorry, they won't be at ${event.name}.`,
+    url,
+    tag: `event-invite-resp-${event.id}-${opts.inviteeUserId}`,
+    category: 'signup_activity',
+  });
+}
+
+// ============================================================
+
+/**
  * An event's host was reassigned to the club owner because the original
  * host deleted their account. Notify the new host (the club owner) so
  * they know they're now responsible for the event.
