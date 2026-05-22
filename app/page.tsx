@@ -13,7 +13,7 @@ import {
 import { ACTIVITY_TYPE_LABEL, type ActivityType, activityHasScoring } from '@/lib/use-activity';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
-import EventsNearYou from '@/components/EventsNearYou';
+import NearYou from '@/components/NearYou';
 
 type ClubCard = {
   id: string;
@@ -327,8 +327,8 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* EVENTS NEAR YOU */}
-      <EventsNearYou />
+      {/* NEAR YOU - events + clubs discovery */}
+      <NearYou />
 
       {/* ACTION ITEMS */}
       {actions.length > 0 && (
