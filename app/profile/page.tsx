@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/use-auth';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
 import NotificationsPanel from '@/components/NotificationsPanel';
+import DangerZone from '@/components/DangerZone';
 
 type UserRow = {
   id: string;
@@ -214,13 +215,18 @@ function ProfilePageInner() {
         </div>
 
         <div>
-          <label className="label">Email <span className="text-cinnabar">*</span></label>
-          <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
-          {emailChanged && (
-            <p className="text-xs text-cinnabar/80 italic mt-1">
-              Changing your email will move your sign-in to the new address.
-            </p>
-          )}
+          <label className="label">Email</label>
+          <input
+            type="email"
+            className="input bg-bone/50 text-ink/60 cursor-not-allowed"
+            value={email}
+            readOnly
+            disabled
+            autoComplete="email"
+          />
+          <p className="text-xs text-ink/40 italic mt-1">
+            To change your sign-in email, contact <a href="mailto:support@pungctual.com" className="text-jade underline">support@pungctual.com</a>.
+          </p>
         </div>
 
         <div>
@@ -264,6 +270,7 @@ function ProfilePageInner() {
         </div>
       </form>
       <NotificationsPanel />
+      <DangerZone />
     </div>
   );
 }

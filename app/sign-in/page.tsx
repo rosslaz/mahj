@@ -72,6 +72,16 @@ export default function SignInPage() {
   const [isPwa, setIsPwa] = useState<boolean | null>(null);
   useEffect(() => { setIsPwa(detectIsPwa()); }, []);
 
+  // Show a brief farewell message if the user just deleted their account.
+  // Read from URL directly to avoid useSearchParams Suspense requirement.
+  const [showDeletedMessage, setShowDeletedMessage] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('deleted') === '1') {
+      setShowDeletedMessage(true);
+    }
+  }, []);
+
   // In browser mode, the code form is hidden behind a "Link not working?"
   // toggle. In PWA mode, the code form is the primary UI — this toggle
   // is unused (kept for symmetry).
@@ -148,6 +158,13 @@ export default function SignInPage() {
 
   return (
     <div className="max-w-md mx-auto pt-8">
+      {showDeletedMessage && (
+        <div className="tile-border p-5 mb-6 bg-jade/5 border-jade/40">
+          <p className="text-sm text-ink/80">
+            <strong>Your account has been deleted.</strong> A confirmation email is on its way. Thanks for being part of Pungctual.
+          </p>
+        </div>
+      )}
       <header className="mb-10">
         <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-4">Enter the Parlor</p>
         <h1 className="font-display text-5xl">Sign In</h1>

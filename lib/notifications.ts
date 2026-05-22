@@ -252,6 +252,35 @@ export async function dispatchPlayerAddedByHost(opts: {
 // ============================================================
 
 /**
+ * An event's host was reassigned to the club owner because the original
+ * host deleted their account. Notify the new host (the club owner) so
+ * they know they're now responsible for the event.
+ *
+ * The new owner can either run the event, find a replacement host, or
+ * cancel it. We don't make assumptions.
+ */
+export async function dispatchEventHostReassigned(opts: {
+  eventId: string;
+  newHostUserId: string;
+}): Promise<void> {
+  const event = await loadEventContext(opts.eventId);
+  if (!event) return;
+
+  const dateStr = formatEventDateShort(event.date);
+  const url = eventUrl(event.club.slug, event.activity.slug, event.id);
+
+  await sendPushToUser(opts.newHostUserId, {
+    title: `You're now hosting: ${event.name}`,
+    body: `${dateStr} — the previous host deleted their account. Review the event details.`,
+    url,
+    tag: `host-reassigned-${event.id}`,
+    // Categorized under signup_activity since it's event-related and
+    // most users who'd care about this also care about signup activity.
+    category: 'signup_activity',
+  });
+}
+
+/**
  * Someone joined a club (used the join code). Notify all owners + admins
  * EXCEPT the new member themselves (defensive — shouldn't happen but
  * harmless).
