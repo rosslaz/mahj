@@ -385,19 +385,26 @@ export default function HomePage() {
   // -------------------- SIGNED IN, NO CLUBS --------------------
   if (clubs.length === 0) {
     return (
-      <div className="space-y-10">
+      <div className="space-y-12">
         <header>
           <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">Welcome</p>
           <h1 className="font-display text-5xl">{auth.name || 'Player'}</h1>
         </header>
         <div className="tile-border p-10 text-center">
-          <p className="font-display italic text-xl text-ink/50 mb-2">You haven't joined a club yet.</p>
-          <p className="text-sm text-ink/50 mb-6">Start one for your group or join one with a code.</p>
+          <p className="font-display italic text-xl text-ink/50 mb-2">You haven&apos;t joined a club yet.</p>
+          <p className="text-sm text-ink/50 mb-6">Start one for your group, join one with a code, or look for clubs and events near you below.</p>
           <div className="flex justify-center gap-3 flex-wrap">
             <Link href="/clubs/new" className="btn">Create a Club</Link>
             <Link href="/clubs/join" className="btn btn-ghost">Join with Code</Link>
           </div>
         </div>
+
+        {/* Help the user find a public club or event nearby — third path
+            into the app for people who don't have a code and don't want to
+            start a club from scratch. NearYou handles its own no-zip prompt
+            gracefully (links to /profile) so it's safe to mount even before
+            the user has set their ZIP. */}
+        <NearYou />
       </div>
     );
   }
