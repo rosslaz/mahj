@@ -56,43 +56,44 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
     return pathname.startsWith(href);
   }
 
-  // When deeply inside an activity, show a breadcrumb instead of full club nav,
-  // because the activity has its own nav.
+  // When deeply inside an activity, render NO club chrome — the activity
+  // layout takes over completely with its own breadcrumb that goes all the
+  // way back to "My Clubs". This avoids stacking redundant titles.
   const insideActivity = pathname.startsWith(`${base}/a/`);
+
+  if (insideActivity) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="space-y-8">
-      <div className="border-b border-ink/10 pb-5 -mt-4">
-        <Link href="/clubs" className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">
-          ← My Clubs
-        </Link>
-        <div className="flex items-baseline justify-between flex-wrap gap-2 mt-3">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <Link href={base} className="font-display text-3xl md:text-4xl text-jade hover:text-cinnabar transition-colors">{cb.club?.name}</Link>
-            {cb.role && (
-              <span className="text-[10px] tracking-[0.25em] uppercase text-ink/40">{cb.role}</span>
-            )}
-          </div>
-        </div>
-        {!insideActivity && (
-          <nav className="mt-4 flex gap-5 flex-wrap text-sm overflow-x-auto">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`whitespace-nowrap transition-colors ${
-                  isActive(l.href, l.exact)
-                    ? 'text-cinnabar border-b-2 border-cinnabar pb-1 -mb-px'
-                    : l.action
-                      ? 'text-jade hover:text-cinnabar font-medium pb-1'
-                      : 'text-ink/60 hover:text-ink pb-1'
-                }`}
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-        )}
+      <div className="border-b border-ink/10 pb-4 -mt-4">
+        {/* Compact breadcrumb: My Clubs / Club Name */}
+        <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap">
+          <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+          <span className="text-ink/20">/</span>
+          <span className="text-ink/80">{cb.club?.name}</span>
+          {cb.role && (
+            <span className="ml-2 text-[10px] tracking-[0.25em] uppercase text-ink/40">{cb.role}</span>
+          )}
+        </nav>
+        <nav className="mt-3 flex gap-5 flex-wrap text-sm overflow-x-auto">
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`whitespace-nowrap transition-colors ${
+                isActive(l.href, l.exact)
+                  ? 'text-cinnabar border-b-2 border-cinnabar pb-1 -mb-px'
+                  : l.action
+                    ? 'text-jade hover:text-cinnabar font-medium pb-1'
+                    : 'text-ink/60 hover:text-ink pb-1'
+              }`}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
       </div>
 
       {children}

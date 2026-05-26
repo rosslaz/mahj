@@ -61,19 +61,19 @@ export default function ActivityLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="space-y-8">
-      <div className="border-b border-ink/10 pb-5 -mt-4">
-        <Link href={`/c/${clubSlug}`} className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">
-          ← {cb.club?.name}
-        </Link>
-        <div className="flex items-baseline justify-between flex-wrap gap-2 mt-3">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <h2 className="font-display text-3xl md:text-4xl text-jade">{act.activity.name}</h2>
-            <span className="text-[10px] tracking-[0.25em] uppercase text-ink/40">
-              {ACTIVITY_TYPE_LABEL[act.activity.type]}
-            </span>
-          </div>
-        </div>
-        <nav className="mt-4 flex gap-5 flex-wrap text-sm overflow-x-auto">
+      <div className="border-b border-ink/10 pb-4 -mt-4">
+        {/* Full path breadcrumb: My Clubs / Lazar / Tuesday League */}
+        <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap">
+          <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+          <span className="text-ink/20">/</span>
+          <Link href={`/c/${clubSlug}`} className="text-ink/40 hover:text-cinnabar transition-colors">{cb.club?.name}</Link>
+          <span className="text-ink/20">/</span>
+          <span className="text-ink/80">{act.activity.name}</span>
+          <span className="ml-2 text-[10px] tracking-[0.25em] uppercase text-ink/40">
+            {ACTIVITY_TYPE_LABEL[act.activity.type]}
+          </span>
+        </nav>
+        <nav className="mt-3 flex gap-5 flex-wrap text-sm overflow-x-auto">
           {links.map((l) => (
             <Link
               key={l.href}

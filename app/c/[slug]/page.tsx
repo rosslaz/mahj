@@ -127,11 +127,16 @@ export default function ClubOverview() {
   return (
     <PullToRefresh onRefresh={load}>
     <div className="space-y-12">
-      {cb.club.description && (
-        <p className="text-ink/70 italic text-base max-w-2xl -mt-2 leading-relaxed">
-          {cb.club.description}
-        </p>
-      )}
+      {/* Club name as page header — the layout chrome above is just a small
+          breadcrumb + tabs, so the page is responsible for its own title. */}
+      <header>
+        <h1 className="font-display text-4xl md:text-5xl text-jade">{cb.club?.name}</h1>
+        {cb.club.description && (
+          <p className="text-ink/70 italic text-base max-w-2xl mt-3 leading-relaxed">
+            {cb.club.description}
+          </p>
+        )}
+      </header>
 
       {/* NEXT EVENT across club */}
       <section>

@@ -290,8 +290,14 @@ export default function NewActivityPage() {
     return (
       <div className="max-w-2xl mx-auto space-y-10">
         <header>
-          <Link href={`/c/${clubSlug}`} className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">← {cb.club.name}</Link>
-          <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mt-4 mb-3">A new activity</p>
+          <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap mb-5">
+            <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+            <span className="text-ink/20">/</span>
+            <Link href={`/c/${clubSlug}`} className="text-ink/40 hover:text-cinnabar transition-colors">{cb.club.name}</Link>
+            <span className="text-ink/20">/</span>
+            <span className="text-ink/80">New Activity</span>
+          </nav>
+          <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">A new activity</p>
           <h1 className="font-display text-5xl">Add Activity</h1>
           <p className="mt-3 text-ink/60 italic">Pick a type.</p>
         </header>
@@ -322,6 +328,13 @@ export default function NewActivityPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-10">
       <header>
+        <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap mb-3">
+          <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+          <span className="text-ink/20">/</span>
+          <Link href={`/c/${clubSlug}`} className="text-ink/40 hover:text-cinnabar transition-colors">{cb.club.name}</Link>
+          <span className="text-ink/20">/</span>
+          <span className="text-ink/80">New {ACTIVITY_TYPE_LABEL[type]}</span>
+        </nav>
         <button
           onClick={() => { setType(null); setError(null); }}
           className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar"

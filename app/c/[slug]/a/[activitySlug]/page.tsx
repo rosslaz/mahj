@@ -187,11 +187,16 @@ export default function ActivityOverview() {
 
   return (
     <div className="space-y-12">
-      {act.activity.description && (
-        <p className="text-ink/70 italic text-base max-w-2xl -mt-2 leading-relaxed">
-          {act.activity.description}
-        </p>
-      )}
+      {/* Activity name as page header — the layout chrome is just a small
+          breadcrumb + tabs, so the page is responsible for its own title. */}
+      <header>
+        <h1 className="font-display text-4xl md:text-5xl text-jade">{act.activity.name}</h1>
+        {act.activity.description && (
+          <p className="text-ink/70 italic text-base max-w-2xl mt-3 leading-relaxed">
+            {act.activity.description}
+          </p>
+        )}
+      </header>
 
       {/* NEXT EVENT */}
       <section>

@@ -649,10 +649,7 @@ export default function EventDetailPage() {
     <div className="space-y-12">
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <Link href={eventBasePath} className="text-xs tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">
-            ← All Nights
-          </Link>
-          <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mt-4 mb-2">
+          <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-2">
             {new Date(night.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             {night.start_time && <span className="ml-2">· {formatTime12(night.start_time)}</span>}
             {isHiddenEvent && (
