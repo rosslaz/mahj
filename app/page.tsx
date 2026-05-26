@@ -14,6 +14,7 @@ import { ACTIVITY_TYPE_LABEL, type ActivityType, activityHasScoring } from '@/li
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import NearYou from '@/components/NearYou';
+import { notifySignupCreated, notifySignupWithdrawn } from '@/app/actions/notifications';
 
 type ClubCard = {
   id: string;
@@ -92,18 +93,38 @@ export default function HomePage() {
         const raw = (gnData as any[]) || [];
         const eventIds = raw.map((r) => r.id);
 
-        // Fetch approved signups for these events to count them and find mine
+        // Fetch all signups (any status) and pending event invitations for
+        // the user. We need approved counts for capacity display, the user's
+        // own approved signups (signed_up), the user's own pending signups
+        // (pending_signup), and the user's pending invitations on hidden
+        // events (pending_invitation).
         let approvedCountByEvent = new Map<string, number>();
-        let mySignupSet = new Set<string>();
+        let myApprovedSet = new Set<string>();
+        let myPendingSignupSet = new Set<string>();
+        let myPendingInviteSet = new Set<string>();
         if (eventIds.length > 0) {
-          const { data: suData } = await supabase
-            .from('night_signups')
-            .select('event_id, player_id')
-            .in('event_id', eventIds)
-            .eq('status', 'approved');
+          const [{ data: suData }, { data: invData }] = await Promise.all([
+            supabase
+              .from('night_signups')
+              .select('event_id, player_id, status')
+              .in('event_id', eventIds),
+            supabase
+              .from('event_invites')
+              .select('event_id, invitee_user_id, status')
+              .in('event_id', eventIds)
+              .eq('invitee_user_id', auth.userId!)
+              .eq('status', 'pending'),
+          ]);
           ((suData as any[]) || []).forEach((r) => {
-            approvedCountByEvent.set(r.event_id, (approvedCountByEvent.get(r.event_id) ?? 0) + 1);
-            if (r.player_id === auth.userId) mySignupSet.add(r.event_id);
+            if (r.status === 'approved') {
+              approvedCountByEvent.set(r.event_id, (approvedCountByEvent.get(r.event_id) ?? 0) + 1);
+              if (r.player_id === auth.userId) myApprovedSet.add(r.event_id);
+            } else if (r.status === 'pending' && r.player_id === auth.userId) {
+              myPendingSignupSet.add(r.event_id);
+            }
+          });
+          ((invData as any[]) || []).forEach((r) => {
+            myPendingInviteSet.add(r.event_id);
           });
         }
 
@@ -111,11 +132,20 @@ export default function HomePage() {
           .filter((g) => g.activity)
           .map((g) => {
             const club = myClubs.find((c) => c.id === g.club_id)!;
-            const personal: PersonalStatus = g.host?.id === auth.userId
-              ? { kind: 'hosting' }
-              : mySignupSet.has(g.id)
-                ? { kind: 'signed_up' }
-                : { kind: 'not_signed_up' };
+            // Priority order matters: hosting > invited > approved > pending > not-signed-up.
+            // Invited beats approved because if someone is both (admin invited themselves),
+            // they should be shown as in. Actually — if you have an invite AND an approved
+            // signup, you've effectively accepted; the invite is fulfilled. Approved wins.
+            const personal: PersonalStatus =
+              g.host?.id === auth.userId
+                ? { kind: 'hosting' }
+                : myApprovedSet.has(g.id)
+                  ? { kind: 'signed_up' }
+                  : myPendingInviteSet.has(g.id)
+                    ? { kind: 'pending_invitation' }
+                    : myPendingSignupSet.has(g.id)
+                      ? { kind: 'pending_signup' }
+                      : { kind: 'not_signed_up' };
             return {
               id: g.id,
               name: g.name,
@@ -228,6 +258,30 @@ export default function HomePage() {
             });
           }
         });
+
+        // Pending event invitations — surface them as a top-priority action.
+        // RLS lets us see invites only for events we're authorized to see.
+        const { data: pendingInvites } = await supabase
+          .from('event_invites')
+          .select('event:event_id(id, name, date, status, club_id, deleted_at, activity:activity_id(slug)), inviter:invited_by_user_id(name)')
+          .eq('invitee_user_id', auth.userId!)
+          .eq('status', 'pending');
+        ((pendingInvites as any[]) || []).forEach((r) => {
+          const g = r.event;
+          if (!g || g.deleted_at || g.status !== 'active' || !g.activity) return;
+          if (g.date < today) return;  // past events — invitation moot
+          const cSlug = myClubs.find((c) => c.id === g.club_id)?.slug;
+          if (!cSlug) return;  // somehow not in our clubs (shouldn't happen)
+          const inviterName = r.inviter?.name;
+          items.unshift({
+            id: 'invite-' + g.id,
+            label: inviterName
+              ? `${inviterName} invited you to "${g.name}" — respond`
+              : `You're invited to "${g.name}" — respond`,
+            href: `/c/${cSlug}/a/${g.activity.slug}/events/${g.id}`,
+            tone: 'warn',
+          });
+        });
       }
       setActions(items);
 
@@ -236,6 +290,60 @@ export default function HomePage() {
 
   useEffect(() => { load(); }, [load]);
   useRefreshOnFocus(load, !auth.loading && !!auth.userId);
+
+  // Inline signup/withdraw — invoked from NextEventCard / UpcomingCard. We do
+  // the insert/delete directly via Supabase (RLS handles authz) and then
+  // refresh dashboard data. Notifications are fire-and-forget.
+  //
+  // Important: the card hides the "Sign me up" button when the user isn't in
+  // a "not_signed_up" personal state, so we don't expect to be called when the
+  // user is already signed up. The capacity check stays as a guard since the
+  // dashboard data could be stale by a few seconds.
+  const handleQuickSignup = useCallback(async (eventId: string) => {
+    if (!auth.userId) return;
+    const ev = upcomingAll.find((e) => e.id === eventId);
+    if (!ev) return;
+    const capacityMax = ev.num_tables * 5;
+    if ((ev.signup_count ?? 0) >= capacityMax) {
+      alert('Signups filled up — refresh to see the latest.');
+      await load();
+      return;
+    }
+    const { data, error } = await supabase
+      .from('night_signups')
+      .insert({
+        club_id: ev.club_id,
+        event_id: eventId,
+        player_id: auth.userId,
+        status: 'approved',  // dashboard cards only show for club members
+      })
+      .select('id')
+      .single();
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    if (data?.id) {
+      notifySignupCreated((data as any).id as string, 'approved').catch(() => {});
+    }
+    await load();
+  }, [auth.userId, supabase, upcomingAll, load]);
+
+  const handleQuickWithdraw = useCallback(async (eventId: string) => {
+    if (!auth.userId) return;
+    if (!confirm('Withdraw from this event?')) return;
+    const { error } = await supabase
+      .from('night_signups')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('player_id', auth.userId);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    notifySignupWithdrawn(eventId, auth.userId).catch(() => {});
+    await load();
+  }, [auth.userId, supabase, load]);
 
   // -------------------- SIGNED OUT --------------------
   if (!auth.loading && !auth.email) {
@@ -310,27 +418,10 @@ export default function HomePage() {
         <h1 className="font-display text-5xl md:text-6xl">{auth.name || 'Player'}</h1>
       </header>
 
-      {/* NEXT EVENT */}
-      <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
-        {nextEvent ? (
-          <NextEventCard
-            night={nextEvent}
-            eventBasePath={`/c/${nextEvent.club_slug}/a/${nextEvent.activity_slug}/events`}
-            personalStatus={nextEvent.personal}
-            leagueName={`${clubs.find((c) => c.id === nextEvent.club_id)?.name} · ${nextEvent.activity_name}`}
-          />
-        ) : (
-          <div className="tile-border p-10 text-center">
-            <p className="font-display italic text-xl text-ink/50">Nothing scheduled across your clubs.</p>
-          </div>
-        )}
-      </section>
-
-      {/* NEAR YOU - events + clubs discovery */}
-      <NearYou />
-
-      {/* ACTION ITEMS */}
+      {/* FOR YOU — top priority. Things that need your attention live here:
+          pending event invitations, pending signup approvals you need to make
+          as host, scoring you need to enter. Surfaced first because it's why
+          you opened the app. */}
       {actions.length > 0 && (
         <section>
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">For You</div>
@@ -350,7 +441,26 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* UPCOMING */}
+      {/* NEXT EVENT — the headline upcoming thing across all your clubs */}
+      <section>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
+        {nextEvent ? (
+          <NextEventCard
+            night={nextEvent}
+            eventBasePath={`/c/${nextEvent.club_slug}/a/${nextEvent.activity_slug}/events`}
+            personalStatus={nextEvent.personal}
+            leagueName={`${clubs.find((c) => c.id === nextEvent.club_id)?.name} · ${nextEvent.activity_name}`}
+            onSignup={handleQuickSignup}
+            onWithdraw={handleQuickWithdraw}
+          />
+        ) : (
+          <div className="tile-border p-10 text-center">
+            <p className="font-display italic text-xl text-ink/50">Nothing scheduled across your clubs.</p>
+          </div>
+        )}
+      </section>
+
+      {/* UPCOMING — the next 3 events after the headline */}
       {upcoming.length > 0 && (
         <section>
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Upcoming</div>
@@ -363,28 +473,15 @@ export default function HomePage() {
                 index={i}
                 leagueName={`${clubs.find((c) => c.id === n.club_id)?.name} · ${n.activity_name}`}
                 personalStatus={n.personal}
+                onSignup={handleQuickSignup}
+                onWithdraw={handleQuickWithdraw}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* LIFETIME STATS */}
-      <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Lifetime</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink/15 border border-ink/15">
-          <StatCell label="Games" value={stats.games_played.toLocaleString()} />
-          <StatCell label="Wins" value={stats.total_wins.toLocaleString()} />
-          <StatCell label="Points" value={stats.total_points.toLocaleString()} />
-          <StatCell
-            label="Win %"
-            value={winPct === null ? '—' : `${winPct}%`}
-            sub={winPct === null ? 'no games yet' : undefined}
-          />
-        </div>
-      </section>
-
-      {/* MY CLUBS */}
+      {/* MY CLUBS — the entry point to specific clubs */}
       <section>
         <div className="flex items-baseline justify-between mb-3">
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40">My Clubs</div>
@@ -407,6 +504,24 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* LIFETIME STATS — historical, not actionable. Moved below clubs. */}
+      <section>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Lifetime</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink/15 border border-ink/15">
+          <StatCell label="Games" value={stats.games_played.toLocaleString()} />
+          <StatCell label="Wins" value={stats.total_wins.toLocaleString()} />
+          <StatCell label="Points" value={stats.total_points.toLocaleString()} />
+          <StatCell
+            label="Win %"
+            value={winPct === null ? '—' : `${winPct}%`}
+            sub={winPct === null ? 'no games yet' : undefined}
+          />
+        </div>
+      </section>
+
+      {/* NEAR YOU — discovery, exploratory. Bottom of page where browsing lives. */}
+      <NearYou />
     </div>
     </PullToRefresh>
   );
