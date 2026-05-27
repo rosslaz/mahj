@@ -279,9 +279,14 @@ export default function BillingPage() {
             of whether they're trialing or already converted to active. The
             portal lets them update card, change plan, cancel. */}
         {(isActive || isPastDue || isTrialingPostSubscribe) && (
-          <button onClick={openPortal} disabled={working} className="btn btn-jade w-full justify-center">
-            {working ? 'Opening…' : 'Manage subscription'}
-          </button>
+          <>
+            <button onClick={openPortal} disabled={working} className="btn btn-jade w-full justify-center">
+              {working ? 'Opening…' : 'Manage subscription'}
+            </button>
+            <p className="text-xs text-ink/40 italic text-center">
+              Opens Stripe&apos;s secure portal. Click the Pungctual logo (top-left) to return.
+            </p>
+          </>
         )}
 
         {isGrandfathered && (
