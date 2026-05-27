@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/use-auth';
 import { slugify } from '@/lib/slug';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
+import { provisionClubSubscription } from '@/app/actions/billing-provision';
 
 function randomSuffix(len = 4): string {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -102,6 +103,16 @@ export default function NewClubPage() {
         role: 'owner',
       });
       if (memErr) throw new Error('Club created but membership failed: ' + memErr.message);
+
+      // Provision the subscription row. @pungctual.com owners get grandfathered;
+      // everyone else gets a 14-day Pro trial (30 days for the first 10 new clubs).
+      // Don't block the redirect on this — worst case they land on the club page
+      // and see free-tier limits until a retry kicks in.
+      try {
+        await provisionClubSubscription((clubData as any).id);
+      } catch (err) {
+        console.error('[create-club] provisioning failed (non-fatal):', err);
+      }
 
       router.push(`/c/${slug}`);
     } catch (e: any) {

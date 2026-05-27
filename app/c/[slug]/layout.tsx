@@ -47,7 +47,10 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
     links.push({ href: `${base}/a/new`, label: '+ Add Activity', action: true });
     links.push({ href: `${base}/admin`, label: 'Admin' });
   }
-  if (cb.isOwner) links.push({ href: `${base}/settings`, label: 'Settings' });
+  if (cb.isOwner) {
+    links.push({ href: `${base}/settings`, label: 'Settings' });
+    links.push({ href: `${base}/billing`, label: 'Billing' });
+  }
 
   function isActive(href: string, exact = false) {
     if (exact) return pathname === href;
