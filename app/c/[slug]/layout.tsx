@@ -90,7 +90,7 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
             <span className="ml-2 text-[10px] tracking-[0.25em] uppercase text-ink/40">{cb.role}</span>
           )}
         </nav>
-        <nav className="mt-3 flex gap-5 flex-wrap text-sm overflow-x-auto items-center">
+        <nav className="mt-3 flex gap-5 flex-wrap text-sm items-center">
           {links.map((l) => (
             <Link
               key={l.href}
