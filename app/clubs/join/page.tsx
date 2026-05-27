@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { notifyClubMemberJoined } from '@/app/actions/notifications';
+import { checkCanAddMember } from '@/app/actions/billing-gates';
 
 export default function JoinClubPage() {
   const router = useRouter();
@@ -51,6 +52,17 @@ export default function JoinClubPage() {
     }
 
     const clubId = (clubData as any).id;
+
+    // Free-tier gate: max 5 members per club.
+    // This is on the JOINER's side — if the club is full, the new person
+    // can't join. The owner needs to upgrade or remove someone.
+    const gate = await checkCanAddMember(clubId);
+    if (!gate.ok) {
+      setError(gate.error + ' Ask the club owner to upgrade to Pro.');
+      setSubmitting(false);
+      return;
+    }
+
     const { error: memErr } = await supabase.from('club_members').insert({
       club_id: clubId,
       user_id: userId,

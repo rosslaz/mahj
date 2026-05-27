@@ -16,6 +16,7 @@ import { slugify } from '@/lib/slug';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
 import { computeSeriesDates } from '@/lib/game-utils';
+import { checkCanCreateActivity } from '@/app/actions/billing-gates';
 
 const ACTIVITY_TYPES: ActivityType[] = ['league', 'tournament', 'class', 'open_play'];
 
@@ -163,6 +164,15 @@ export default function NewActivityPage() {
     if (!activityName.trim()) { setError('Activity name is required.'); return; }
     setSubmitting(true);
     try {
+      // Free-tier gate: max 1 activity, must be league or open_play.
+      // We check on the server because the answer depends on club-wide
+      // subscription state, not just the form.
+      const gate = await checkCanCreateActivity(cb.club!.id, type);
+      if (!gate.ok) {
+        setError(gate.error);
+        setSubmitting(false);
+        return;
+      }
       const aSlug = await pickActivitySlug(slugify(activityName.trim()));
       const { data: actData, error: actErr } = await supabase
         .from('activities')
@@ -214,6 +224,13 @@ export default function NewActivityPage() {
 
     setSubmitting(true);
     try {
+      // Free-tier gate: same check as createActivityOnly.
+      const gate = await checkCanCreateActivity(cb.club!.id, type);
+      if (!gate.ok) {
+        setError(gate.error);
+        setSubmitting(false);
+        return;
+      }
       // Create the activity first
       const aSlug = await pickActivitySlug(slugify(activityName.trim()));
       const { data: actData, error: actErr } = await supabase

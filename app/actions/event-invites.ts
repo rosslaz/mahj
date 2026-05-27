@@ -3,6 +3,7 @@
 import { randomBytes } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
+import { canSendEmailInvites } from '@/lib/billing';
 import {
   dispatchEventInvitationReceived,
   dispatchEventInvitationAccepted,
@@ -135,6 +136,16 @@ export async function sendEventInvitations(opts: {
   const cleanedOutside = Array.from(
     new Set(opts.outsideEmails.map((e) => e.trim().toLowerCase()).filter(Boolean))
   );
+
+  // Free-tier gate: outside-email invitations are a Pro feature. If any are
+  // requested, gate the whole batch. (Member invitations above are always
+  // allowed for clubs that have the activity unlocked.)
+  if (cleanedOutside.length > 0) {
+    const gate = await canSendEmailInvites(event.club_id);
+    if (!gate.allowed) {
+      return { ok: false, error: gate.reason };
+    }
+  }
 
   if (cleanedOutside.length > MAX_OUTSIDE_INVITES_PER_EVENT) {
     return { ok: false, error: `Maximum ${MAX_OUTSIDE_INVITES_PER_EVENT} outside invitations per event.` };

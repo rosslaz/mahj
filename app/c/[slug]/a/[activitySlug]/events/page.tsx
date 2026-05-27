@@ -11,6 +11,7 @@ import { formatTime12 } from '@/lib/game-utils';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
 import { sendEventInvitations } from '@/app/actions/event-invites';
+import { checkCanCreateHiddenEvent } from '@/app/actions/billing-gates';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
 
@@ -270,6 +271,17 @@ export default function ActivityEventsPage() {
 
     setCreating(true);
     try {
+      // Free-tier gate: hidden events are a Pro feature. Public/private
+      // visibility doesn't require Pro — only hidden does.
+      if (visibility === 'hidden') {
+        const gate = await checkCanCreateHiddenEvent(cb.club.id);
+        if (!gate.ok) {
+          setFormError(gate.error);
+          setCreating(false);
+          return;
+        }
+      }
+
       const { data: nightData, error: nightErr } = await supabase
         .from('events')
         .insert({

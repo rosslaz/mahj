@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { dispatchClubMemberJoined } from '@/lib/notifications';
+import { canAddMember, canSendEmailInvites } from '@/lib/billing';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -76,6 +77,12 @@ export async function createClubInvites(opts: {
   const role = (roleRow as any)?.role as string | undefined;
   if (role !== 'owner' && role !== 'admin') {
     return { ok: false, error: 'Only owners and admins can send invites.' };
+  }
+
+  // Free-tier gate: email invitations are a Pro feature.
+  const gate = await canSendEmailInvites(opts.clubId);
+  if (!gate.allowed) {
+    return { ok: false, error: gate.reason };
   }
 
   // ----------------------------------------------------------------
@@ -314,6 +321,13 @@ export async function acceptClubInvite(token: string): Promise<Result<AcceptResu
 
   const alreadyMember = !!existingMember;
   if (!alreadyMember) {
+    // Free-tier gate: if the club has hit its member cap, block joining.
+    // The owner needs to upgrade or remove someone before this invite can
+    // be accepted. The invite stays "pending" — they can try again later.
+    const gate = await canAddMember(invite.club_id);
+    if (!gate.allowed) {
+      return { ok: false, error: gate.reason + ' Ask the club owner to upgrade to Pro.' };
+    }
     const { error: memErr } = await serviceClient.from('club_members').insert({
       club_id: invite.club_id,
       user_id: userId,

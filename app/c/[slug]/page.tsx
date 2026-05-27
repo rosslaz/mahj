@@ -39,6 +39,14 @@ export default function ClubOverview() {
   const [nextEvent, setNextEvent] = useState<UpcomingEvent | null>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Subscription state — drives the small "Pro Trial — N days" / "Pro" badge
+  // shown next to the club name. Owner-only sees the upgrade nudge; everyone
+  // else sees the badge as informational.
+  const [subState, setSubState] = useState<{
+    status: string;
+    trialEndsAt: string | null;
+    hasStripeSub: boolean;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!cb.club) return;
@@ -116,6 +124,23 @@ export default function ClubOverview() {
       .eq('club_id', cb.club!.id);
     setMemberCount(count || 0);
 
+    // Subscription state for the Pro/Trial badge
+    const { data: subData } = await supabase
+      .from('club_subscriptions')
+      .select('status, trial_ends_at, stripe_subscription_id')
+      .eq('club_id', cb.club!.id)
+      .maybeSingle();
+    if (subData) {
+      const s = subData as any;
+      setSubState({
+        status: s.status,
+        trialEndsAt: s.trial_ends_at,
+        hasStripeSub: !!s.stripe_subscription_id,
+      });
+    } else {
+      setSubState(null);
+    }
+
     setLoading(false);
   }, [cb.club, auth.userId, supabase]);
 
@@ -130,7 +155,10 @@ export default function ClubOverview() {
       {/* Club name as page header — the layout chrome above is just a small
           breadcrumb + tabs, so the page is responsible for its own title. */}
       <header>
-        <h1 className="font-display text-4xl md:text-5xl text-jade">{cb.club?.name}</h1>
+        <div className="flex items-baseline gap-4 flex-wrap">
+          <h1 className="font-display text-4xl md:text-5xl text-jade">{cb.club?.name}</h1>
+          {subState && <SubscriptionBadge subState={subState} slug={slug} isOwner={cb.isOwner} />}
+        </div>
         {cb.club.description && (
           <p className="text-ink/70 italic text-base max-w-2xl mt-3 leading-relaxed">
             {cb.club.description}
@@ -226,5 +254,92 @@ export default function ClubOverview() {
       </section>
     </div>
     </PullToRefresh>
+  );
+}
+
+/**
+ * Tiny subscription badge shown next to the club name. Three flavors:
+ *   - "Pro Trial — N days left" with an Upgrade link for the owner if pre-subscribe
+ *   - "Pro" (jade) for active/trialing-post-subscribe/grandfathered
+ *   - "Free" (subtle) when on the free plan — owners get a tiny "Upgrade" link
+ *
+ * The badge is informational for non-owners and a quiet nudge for owners.
+ * Anything heavier lives on the Billing page.
+ */
+function SubscriptionBadge({
+  subState,
+  slug,
+  isOwner,
+}: {
+  subState: { status: string; trialEndsAt: string | null; hasStripeSub: boolean };
+  slug: string;
+  isOwner: boolean;
+}) {
+  const { status, trialEndsAt, hasStripeSub } = subState;
+
+  // Trialing pre-subscribe = still in the 14/30-day window, no Stripe sub
+  const isTrialingPre = status === 'trialing' && !hasStripeSub;
+  // Trialing post-subscribe = bought during trial, deferred billing
+  const isTrialingPost = status === 'trialing' && hasStripeSub;
+
+  if (isTrialingPre && trialEndsAt) {
+    const daysLeft = Math.max(0, Math.ceil(
+      (new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+    ));
+    return (
+      <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase">
+        <span className="px-2 py-0.5 border border-bamboo/40 bg-bamboo/10 text-bamboo">
+          Pro Trial · {daysLeft}d
+        </span>
+        {isOwner && (
+          <Link href={`/c/${slug}/billing`} className="text-cinnabar hover:underline">
+            Upgrade
+          </Link>
+        )}
+      </span>
+    );
+  }
+
+  if (status === 'active' || isTrialingPost || status === 'past_due') {
+    return (
+      <span className="text-[10px] tracking-[0.2em] uppercase px-2 py-0.5 border border-jade/40 bg-jade/10 text-jade">
+        Pro
+      </span>
+    );
+  }
+
+  if (status === 'grandfathered') {
+    return (
+      <span className="text-[10px] tracking-[0.2em] uppercase px-2 py-0.5 border border-gold/40 bg-gold/10 text-gold">
+        Pro · Lifetime
+      </span>
+    );
+  }
+
+  if (status === 'canceled') {
+    return (
+      <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase">
+        <span className="px-2 py-0.5 border border-cinnabar/40 bg-cinnabar/10 text-cinnabar">
+          Canceled
+        </span>
+        {isOwner && (
+          <Link href={`/c/${slug}/billing`} className="text-cinnabar hover:underline">
+            Renew
+          </Link>
+        )}
+      </span>
+    );
+  }
+
+  // Free
+  return (
+    <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase">
+      <span className="px-2 py-0.5 border border-ink/15 text-ink/50">Free</span>
+      {isOwner && (
+        <Link href={`/c/${slug}/billing`} className="text-jade hover:underline">
+          Upgrade
+        </Link>
+      )}
+    </span>
   );
 }
