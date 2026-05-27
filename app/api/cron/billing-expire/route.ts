@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { runTrialReminderSweep } from '@/lib/trial-reminders';
 
-// Daily cron: downgrade clubs whose Pungctual trial has ended without
-// them subscribing through Stripe.
+// Daily cron: handles trial-related billing transitions.
+//
+//   1. Send trial-ending reminders (7 days out, 1 day out)
+//   2. Downgrade clubs whose trial has fully expired without subscribing
+//
+// Both run every day. Idempotency in each step prevents duplicate work.
+//
+// Order matters: reminders first, then expirations. Same-day expiration
+// gets the "your trial ended" sense via the soft-downgrade banner on the
+// club home, not via another email — we already nagged twice.
 //
 // Trial expiration logic:
 //   - Find rows in club_subscriptions where:
@@ -42,7 +51,17 @@ export async function GET(request: NextRequest) {
   const supabase = svc();
   const now = new Date().toISOString();
 
-  // Find expired trials
+  // Step 1: send trial-ending reminders. Doesn't change subscription state,
+  // just sends emails + push and stamps tracking columns.
+  let reminderResult;
+  try {
+    reminderResult = await runTrialReminderSweep();
+  } catch (err) {
+    console.error('[cron/billing-expire] reminder sweep crashed:', err);
+    reminderResult = { found: 0, sent7d: 0, sent1d: 0, errors: 1 };
+  }
+
+  // Step 2: find expired trials (trial_ends_at < now and no Stripe sub)
   const { data: expired, error: fetchErr } = await supabase
     .from('club_subscriptions')
     .select('id, club_id, trial_ends_at')
@@ -57,7 +76,7 @@ export async function GET(request: NextRequest) {
 
   const expiredList = (expired as any[]) || [];
   if (expiredList.length === 0) {
-    return NextResponse.json({ ok: true, expired: 0 });
+    return NextResponse.json({ ok: true, expired: 0, reminders: reminderResult });
   }
 
   // Downgrade each. Could do this as a single UPDATE in one shot, but
@@ -81,5 +100,5 @@ export async function GET(request: NextRequest) {
   console.log(`[cron/billing-expire] downgraded ${expiredIds.length} club(s)`,
     expiredList.map((r) => r.club_id));
 
-  return NextResponse.json({ ok: true, expired: expiredIds.length });
+  return NextResponse.json({ ok: true, expired: expiredIds.length, reminders: reminderResult });
 }

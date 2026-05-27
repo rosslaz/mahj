@@ -166,6 +166,20 @@ export default function ClubOverview() {
         )}
       </header>
 
+      {/* BILLING BANNER — contextual nudge for owners. Three cases:
+            1. Trial ending soon (last 7 days, no Stripe sub) → "trial ends in N days"
+            2. Free tier, over a limit → "you have N members, free caps at 5"
+            3. Canceled subscription still in grace period → "Pro ends on X"
+          Non-owners don't see any of these — billing is the owner's problem. */}
+      {cb.isOwner && subState && (
+        <BillingBanner
+          subState={subState}
+          slug={slug}
+          memberCount={memberCount}
+          activityCount={activities.length}
+        />
+      )}
+
       {/* NEXT EVENT across club */}
       <section>
         <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
@@ -342,4 +356,113 @@ function SubscriptionBadge({
       )}
     </span>
   );
+}
+
+/**
+ * Contextual banner shown to owners only. Three cases, in priority order:
+ *
+ *   1. Trial ending in ≤7 days → countdown nudge
+ *   2. Canceled paid sub still in grace period → "Pro access ends X"
+ *   3. Free tier and over a free-tier limit → soft "consider upgrading" nudge
+ *
+ * Free tier under all limits gets nothing — they're fine where they are.
+ * Active/Pro/Grandfathered also get nothing — no nudge needed.
+ *
+ * Free-tier limits referenced (kept in sync with lib/billing.ts):
+ *   - maxMembers: 5
+ *   - maxActivities: 1
+ */
+function BillingBanner({
+  subState,
+  slug,
+  memberCount,
+  activityCount,
+}: {
+  subState: { status: string; trialEndsAt: string | null; hasStripeSub: boolean };
+  slug: string;
+  memberCount: number;
+  activityCount: number;
+}) {
+  const { status, trialEndsAt, hasStripeSub } = subState;
+
+  // Case 1: trialing pre-subscribe, last week
+  if (status === 'trialing' && !hasStripeSub && trialEndsAt) {
+    const daysLeft = Math.max(0, Math.ceil(
+      (new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+    ));
+    if (daysLeft <= 7) {
+      const endDateStr = new Date(trialEndsAt).toLocaleDateString();
+      const isUrgent = daysLeft <= 2;
+      return (
+        <div className={`tile-border p-5 flex items-start gap-4 flex-wrap ${
+          isUrgent
+            ? 'border-cinnabar/40 bg-cinnabar/5'
+            : 'border-bamboo/40 bg-bamboo/5'
+        }`}>
+          <div className="flex-1 min-w-[260px]">
+            <p className="text-sm">
+              <strong>{daysLeft === 0 ? 'Today is your last day.' : daysLeft === 1 ? 'Your Pro trial ends tomorrow.' : `Your Pro trial ends in ${daysLeft} days.`}</strong>{' '}
+              <span className="text-ink/60">After {endDateStr}, your club drops to Free. Existing members and activities stay — but new ones beyond free limits will be paused.</span>
+            </p>
+          </div>
+          <Link href={`/c/${slug}/billing`} className="btn btn-jade whitespace-nowrap">
+            Upgrade
+          </Link>
+        </div>
+      );
+    }
+    return null;  // trialing but >7 days out — no banner
+  }
+
+  // Case 2: canceled but still in current period
+  if (status === 'canceled') {
+    // Banner says "ends on X" with renew CTA. Don't need to compute period
+    // end here — billing page handles the precise date. Keep simple.
+    return (
+      <div className="tile-border p-5 flex items-start gap-4 flex-wrap border-cinnabar/40 bg-cinnabar/5">
+        <div className="flex-1 min-w-[260px]">
+          <p className="text-sm">
+            <strong>Your Pro subscription is set to end.</strong>{' '}
+            <span className="text-ink/60">When it does, your club drops to Free. Existing data stays — but new members or activities beyond free limits will be paused.</span>
+          </p>
+        </div>
+        <Link href={`/c/${slug}/billing`} className="btn btn-jade whitespace-nowrap">
+          Renew
+        </Link>
+      </div>
+    );
+  }
+
+  // Case 3: free tier and over a limit
+  if (status === 'free') {
+    const overMembers = memberCount > 5;
+    const overActivities = activityCount > 1;
+    if (!overMembers && !overActivities) return null;
+
+    const parts: string[] = [];
+    if (overMembers) {
+      parts.push(`${memberCount} members (Free is capped at 5)`);
+    }
+    if (overActivities) {
+      parts.push(`${activityCount} activities (Free is capped at 1)`);
+    }
+
+    return (
+      <div className="tile-border p-5 flex items-start gap-4 flex-wrap border-gold/40 bg-gold/5">
+        <div className="flex-1 min-w-[260px]">
+          <p className="text-sm">
+            <strong>You&apos;re over Free limits.</strong>{' '}
+            <span className="text-ink/60">
+              Your club has {parts.join(' and ')}. Nothing has been removed — everything keeps working as-is. You just can&apos;t add more until you upgrade or your numbers drop naturally.
+            </span>
+          </p>
+        </div>
+        <Link href={`/c/${slug}/billing`} className="btn btn-jade whitespace-nowrap">
+          Upgrade
+        </Link>
+      </div>
+    );
+  }
+
+  return null;
 }
