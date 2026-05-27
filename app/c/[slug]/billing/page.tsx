@@ -14,6 +14,7 @@ type SubscriptionRow = {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   is_launch_promo: boolean;
+  stripe_subscription_id: string | null;
 };
 
 /**
@@ -44,7 +45,7 @@ export default function BillingPage() {
     if (!cb.club) return;
     const { data } = await supabase
       .from('club_subscriptions')
-      .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo')
+      .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo, stripe_subscription_id')
       .eq('club_id', cb.club.id)
       .maybeSingle();
     setSub((data as any) ?? null);
@@ -113,11 +114,19 @@ export default function BillingPage() {
   }
 
   const isGrandfathered = sub.status === 'grandfathered' || sub.plan === 'pro_grandfathered';
-  const isTrialing = sub.status === 'trialing';
   const isActive = sub.status === 'active';
   const isPastDue = sub.status === 'past_due';
   const isCanceled = sub.status === 'canceled';
   const isFree = sub.status === 'free';
+
+  // "Trialing" splits into two meaningful sub-cases:
+  //   - Pungctual trial only (no Stripe subscription yet) — show upgrade buttons
+  //   - Pungctual trial AND a Stripe subscription deferred to trial end —
+  //     they've already subscribed; show "manage subscription" and a confirmation
+  const hasSubscribed = !!sub.stripe_subscription_id;
+  const isTrialingPreSubscribe = sub.status === 'trialing' && !hasSubscribed;
+  const isTrialingPostSubscribe = sub.status === 'trialing' && hasSubscribed;
+  const isTrialing = sub.status === 'trialing';
 
   const trialDaysLeft = sub.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(sub.trial_ends_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
@@ -156,7 +165,7 @@ export default function BillingPage() {
           </>
         )}
 
-        {isTrialing && (
+        {isTrialingPreSubscribe && (
           <>
             <div className="font-display text-3xl mb-1">Pro — Trial</div>
             <p className="text-sm text-ink/70">
@@ -166,6 +175,25 @@ export default function BillingPage() {
             <p className="text-sm text-ink/50 mt-1">
               After {new Date(sub.trial_ends_at!).toLocaleDateString()}, your club will downgrade to Free unless you subscribe.
             </p>
+          </>
+        )}
+
+        {isTrialingPostSubscribe && (
+          <>
+            <div className="font-display text-3xl mb-1">
+              Pro — {sub.plan === 'pro_annual' ? 'Annual' : 'Monthly'}
+            </div>
+            <p className="text-sm text-jade italic">
+              You&apos;re subscribed. Your trial continues until {new Date(sub.trial_ends_at!).toLocaleDateString()}.
+            </p>
+            <p className="text-sm text-ink/60 mt-1">
+              First charge of {sub.plan === 'pro_annual' ? '$90' : '$9'} on {new Date(sub.trial_ends_at!).toLocaleDateString()}, then {sub.plan === 'pro_annual' ? 'annually' : 'monthly'} after that.
+            </p>
+            {sub.cancel_at_period_end && (
+              <p className="text-sm text-cinnabar mt-2">
+                Set to cancel — Pro access ends at the end of your trial.
+              </p>
+            )}
           </>
         )}
 
@@ -220,14 +248,13 @@ export default function BillingPage() {
 
       {/* ACTION BUTTONS — context-sensitive */}
       <section className="space-y-3">
-        {/* Show upgrade buttons whenever the user might want to upgrade:
-            - free tier
-            - in a trial (about to be dropped)
-            - canceled but still in grace period (so they can re-up)
-            Excluded: active, past_due (use portal instead), grandfathered (no need) */}
-        {(isFree || isTrialing || isCanceled) && (
+        {/* Upgrade buttons: only for users who haven't subscribed yet.
+            - Pure free tier
+            - In trial but haven't entered checkout
+            - Canceled (give them a way to re-up) */}
+        {(isFree || isTrialingPreSubscribe || isCanceled) && (
           <>
-            {isTrialing && (
+            {isTrialingPreSubscribe && (
               <p className="text-xs text-ink/50 italic text-center">
                 Subscribe now and you won&apos;t be charged until your trial ends on {new Date(sub.trial_ends_at!).toLocaleDateString()}. You keep your remaining trial days.
               </p>
@@ -236,7 +263,10 @@ export default function BillingPage() {
           </>
         )}
 
-        {(isActive || isPastDue) && (
+        {/* Manage subscription: anyone with a Stripe sub on file, regardless
+            of whether they're trialing or already converted to active. The
+            portal lets them update card, change plan, cancel. */}
+        {(isActive || isPastDue || isTrialingPostSubscribe) && (
           <button onClick={openPortal} disabled={working} className="btn btn-jade w-full justify-center">
             {working ? 'Opening…' : 'Manage subscription'}
           </button>
@@ -250,7 +280,7 @@ export default function BillingPage() {
       </section>
 
       {/* WHAT'S IN PRO */}
-      {!isActive && !isGrandfathered && (
+      {!isActive && !isGrandfathered && !isTrialingPostSubscribe && (
         <section>
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">What you get with Pro</div>
           <ul className="space-y-2 text-sm">
