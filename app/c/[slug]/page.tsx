@@ -38,6 +38,7 @@ export default function ClubOverview() {
   const [activities, setActivities] = useState<ActivityCard[]>([]);
   const [nextEvent, setNextEvent] = useState<UpcomingEvent | null>(null);
   const [memberCount, setMemberCount] = useState(0);
+  const [adminCount, setAdminCount] = useState(0);
   const [loading, setLoading] = useState(true);
   // Subscription state — drives the small "Pro Trial — N days" / "Pro" badge
   // shown next to the club name. Owner-only sees the upgrade nudge; everyone
@@ -117,12 +118,20 @@ export default function ClubOverview() {
     }
     setNextEvent(next);
 
-    // Member count
+    // Member count + admin count (admin counted separately for the Free
+    // admin-slot banner; doesn't include the owner)
     const { count } = await supabase
       .from('club_members')
       .select('id', { count: 'exact', head: true })
       .eq('club_id', cb.club!.id);
     setMemberCount(count || 0);
+
+    const { count: aCount } = await supabase
+      .from('club_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('club_id', cb.club!.id)
+      .eq('role', 'admin');
+    setAdminCount(aCount || 0);
 
     // Subscription state for the Pro/Trial badge
     const { data: subData } = await supabase
@@ -177,6 +186,7 @@ export default function ClubOverview() {
           slug={slug}
           memberCount={memberCount}
           activityCount={activities.length}
+          adminCount={adminCount}
         />
       )}
 
@@ -377,11 +387,13 @@ function BillingBanner({
   slug,
   memberCount,
   activityCount,
+  adminCount,
 }: {
   subState: { status: string; trialEndsAt: string | null; hasStripeSub: boolean };
   slug: string;
   memberCount: number;
   activityCount: number;
+  adminCount: number;
 }) {
   const { status, trialEndsAt, hasStripeSub } = subState;
 
@@ -437,7 +449,8 @@ function BillingBanner({
   if (status === 'free') {
     const overMembers = memberCount > 5;
     const overActivities = activityCount > 1;
-    if (!overMembers && !overActivities) return null;
+    const overAdmins = adminCount > 1;
+    if (!overMembers && !overActivities && !overAdmins) return null;
 
     const parts: string[] = [];
     if (overMembers) {
@@ -445,6 +458,9 @@ function BillingBanner({
     }
     if (overActivities) {
       parts.push(`${activityCount} activities (Free is capped at 1)`);
+    }
+    if (overAdmins) {
+      parts.push(`${adminCount} admins (Free is capped at 1)`);
     }
 
     return (

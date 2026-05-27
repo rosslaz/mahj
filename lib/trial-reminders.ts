@@ -171,7 +171,7 @@ async function sendReminderEmail(
     : 'Your Pro trial ends tomorrow';
 
   const intro = which === '7d'
-    ? `Your free trial of Pungctual Pro for ${row.club.name} ends on ${trialEndStr}. Subscribe before then to keep all Pro features running smoothly — unlimited members, all activity types, hidden events, and email invitations.`
+    ? `Your free trial of Pungctual Pro for ${row.club.name} ends on ${trialEndStr}. Subscribe before then to keep all Pro features running smoothly — unlimited members, unlimited admins, all activity types, hidden events, and email invitations.`
     : `This is a final reminder: your Pungctual Pro trial for ${row.club.name} ends on ${trialEndStr}. After that, your club drops to the Free plan and Pro features will be paused. Your members and activities all stay — but new ones beyond free limits will be blocked until you upgrade.`;
 
   const textBody = [

@@ -302,6 +302,7 @@ export default function BillingPage() {
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">What you get with Pro</div>
           <ul className="space-y-2 text-sm">
             <Feature label="Unlimited members per club" />
+            <Feature label="Unlimited admins (delegate management to co-organizers)" />
             <Feature label="Unlimited activities (Leagues, Tournaments, Classes, Open Play)" />
             <Feature label="Hidden, invite-only events" />
             <Feature label="Email invitations to outside players" />

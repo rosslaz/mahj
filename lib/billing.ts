@@ -10,6 +10,10 @@ import { createClient } from '@supabase/supabase-js';
 export const FREE_TIER_LIMITS = {
   maxMembers: 5,
   maxActivities: 1,
+  // Max ADDITIONAL admins beyond the owner. Free clubs can promote 1
+  // member to admin; the owner is the second authorizer by default.
+  // Pro clubs have unlimited admins.
+  maxAdmins: 1,
   allowedActivityTypes: ['league', 'open_play'] as const,
   publicAllowed: true,   // public listing is free (unlike most features)
   hiddenEventsAllowed: false,
@@ -170,4 +174,26 @@ export async function canSendEmailInvites(clubId: string): Promise<GateResult> {
     allowed: false,
     reason: 'Email invitations require Pro. Upgrade to invite outside players via email.',
   };
+}
+
+/**
+ * Check whether the club can promote another member to admin. The owner
+ * is excluded from the count — they're always there regardless of tier.
+ *
+ * On Pro: always allowed.
+ * On Free: at most maxAdmins (1) additional admins beyond the owner.
+ */
+export async function canPromoteAdmin(clubId: string): Promise<GateResult> {
+  const status = await getClubBillingStatus(clubId);
+  if (status.isPro) return { allowed: true };
+
+  const supabase = svc();
+  const { data: count } = await supabase.rpc('club_admin_count', { p_club_id: clubId });
+  if ((count ?? 0) >= FREE_TIER_LIMITS.maxAdmins) {
+    return {
+      allowed: false,
+      reason: `Free clubs are limited to ${FREE_TIER_LIMITS.maxAdmins} admin. Upgrade to Pro for unlimited.`,
+    };
+  }
+  return { allowed: true };
 }

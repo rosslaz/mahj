@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
 import { ACTIVITY_TYPE_LABEL, type ActivityType } from '@/lib/use-activity';
 import ClubInvitesPanel from '@/components/ClubInvitesPanel';
+import { checkCanPromoteAdmin } from '@/app/actions/billing-gates';
 
 type Member = {
   user_id: string;
@@ -91,6 +92,15 @@ export default function ClubAdminPage() {
 
   async function setRole(userId: string, newRole: 'admin' | 'member') {
     if (!cb.club) return;
+    // Free-tier gate: only check when promoting (admin direction). Demoting
+    // to member always allowed regardless of plan.
+    if (newRole === 'admin') {
+      const gate = await checkCanPromoteAdmin(cb.club.id);
+      if (!gate.ok) {
+        alert(gate.error);
+        return;
+      }
+    }
     const { error } = await supabase.from('club_members').update({ role: newRole }).eq('club_id', cb.club.id).eq('user_id', userId);
     if (error) alert(error.message); else load();
   }

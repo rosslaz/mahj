@@ -12,6 +12,7 @@ import {
   canCreateActivity as gateCreateActivity,
   canCreateHiddenEvent as gateCreateHiddenEvent,
   canSendEmailInvites as gateSendEmailInvites,
+  canPromoteAdmin as gatePromoteAdmin,
   getClubBillingStatus,
   FREE_TIER_LIMITS,
 } from '@/lib/billing';
@@ -38,6 +39,11 @@ export async function checkCanCreateHiddenEvent(clubId: string): Promise<Result>
 
 export async function checkCanSendEmailInvites(clubId: string): Promise<Result> {
   const r = await gateSendEmailInvites(clubId);
+  return r.allowed ? { ok: true } : { ok: false, error: r.reason };
+}
+
+export async function checkCanPromoteAdmin(clubId: string): Promise<Result> {
+  const r = await gatePromoteAdmin(clubId);
   return r.allowed ? { ok: true } : { ok: false, error: r.reason };
 }
 
