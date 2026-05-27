@@ -168,8 +168,11 @@ export default function ClubOverview() {
         <div className="flex items-baseline justify-between mb-3">
           <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Activities</div>
           {cb.isAdmin && activities.length > 0 && (
-            <Link href={`/c/${slug}/a/new`} className="text-xs tracking-[0.2em] uppercase text-ink/50 hover:text-cinnabar">
-              + Add →
+            <Link
+              href={`/c/${slug}/a/new`}
+              className="text-xs tracking-[0.2em] uppercase text-jade hover:text-cinnabar font-medium"
+            >
+              + New Activity
             </Link>
           )}
         </div>
