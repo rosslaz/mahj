@@ -16,7 +16,7 @@ import { slugify } from '@/lib/slug';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
 import { computeSeriesDates } from '@/lib/game-utils';
-import { checkCanCreateActivity } from '@/app/actions/billing-gates';
+import { checkCanCreateActivity, getNewActivityGateState } from '@/app/actions/billing-gates';
 
 const ACTIVITY_TYPES: ActivityType[] = ['league', 'tournament', 'class', 'open_play'];
 
@@ -74,6 +74,39 @@ export default function NewActivityPage() {
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Billing gate state — loaded once when the club resolves. Until it loads
+  // we render nothing for the body to avoid a flash of the type picker.
+  const [gateState, setGateState] = useState<{
+    isPro: boolean;
+    atActivityCap: boolean;
+    activityCap: number;
+    allowedTypes: Set<ActivityType>;
+  } | null>(null);
+  useEffect(() => {
+    if (!cb.club) return;
+    let cancelled = false;
+    getNewActivityGateState(cb.club.id).then((s) => {
+      if (cancelled) return;
+      setGateState({
+        isPro: s.isPro,
+        atActivityCap: s.atActivityCap,
+        activityCap: s.activityCap,
+        allowedTypes: new Set(s.allowedTypes),
+      });
+    }).catch((err) => {
+      console.error('[new-activity] gate state failed:', err);
+      // Treat failure as "allow everything" so we don't lock users out on
+      // transient errors. The server-side gate on submit is still authoritative.
+      setGateState({
+        isPro: true,
+        atActivityCap: false,
+        activityCap: Number.POSITIVE_INFINITY,
+        allowedTypes: new Set(['league', 'tournament', 'class', 'open_play']),
+      });
+    });
+    return () => { cancelled = true; };
+  }, [cb.club]);
 
   // Live-sync event name from activity name unless user has manually edited it.
   useEffect(() => {
@@ -304,6 +337,42 @@ export default function NewActivityPage() {
 
   // ----------------- STEP 1: type picker -----------------
   if (!type) {
+    // While the gate state is loading, show a placeholder. Avoids flashing
+    // the type picker before we know whether we should show the upgrade
+    // screen instead.
+    if (!gateState) {
+      return <p className="text-ink/40 italic">Loading…</p>;
+    }
+
+    // Free tier and already at the activity cap → upgrade screen instead of
+    // letting them fill out a form they can't submit.
+    if (gateState.atActivityCap) {
+      return (
+        <div className="max-w-xl mx-auto space-y-10">
+          <header>
+            <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap mb-5">
+              <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+              <span className="text-ink/20">/</span>
+              <Link href={`/c/${clubSlug}`} className="text-ink/40 hover:text-cinnabar transition-colors">{cb.club.name}</Link>
+              <span className="text-ink/20">/</span>
+              <span className="text-ink/80">New Activity</span>
+            </nav>
+            <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">Upgrade to add more</p>
+            <h1 className="font-display text-5xl">One activity limit</h1>
+          </header>
+          <div className="tile-border p-8 space-y-5">
+            <p className="text-ink/70 leading-relaxed">
+              Free clubs are limited to <strong>{gateState.activityCap} activity</strong>. Upgrade to Pro for unlimited activities — leagues, tournaments, classes, and open play sessions, all in one club.
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              <Link href={`/c/${clubSlug}/billing`} className="btn">View Pro plans</Link>
+              <Link href={`/c/${clubSlug}`} className="btn btn-ghost">Back to club</Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-2xl mx-auto space-y-10">
         <header>
@@ -317,24 +386,56 @@ export default function NewActivityPage() {
           <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">A new activity</p>
           <h1 className="font-display text-5xl">Add Activity</h1>
           <p className="mt-3 text-ink/60 italic">Pick a type.</p>
+          {!gateState.isPro && (
+            <p className="mt-2 text-xs text-ink/50">
+              Tournaments and Classes require Pro. <Link href={`/c/${clubSlug}/billing`} className="text-cinnabar hover:underline">Upgrade</Link>.
+            </p>
+          )}
         </header>
 
         <div className="grid sm:grid-cols-2 gap-3">
-          {ACTIVITY_TYPES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setType(t)}
-              className="tile-border p-6 text-left hover:border-cinnabar/40 transition-colors group"
-            >
-              <div className="font-display text-2xl mb-2 group-hover:text-cinnabar transition-colors">
-                {ACTIVITY_TYPE_LABEL[t]}
-              </div>
-              <div className="text-sm text-ink/60 italic leading-snug">
-                {ACTIVITY_TYPE_DESCRIPTION[t]}
-              </div>
-            </button>
-          ))}
+          {ACTIVITY_TYPES.map((t) => {
+            const isAllowed = gateState.allowedTypes.has(t);
+            if (isAllowed) {
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className="tile-border p-6 text-left hover:border-cinnabar/40 transition-colors group"
+                >
+                  <div className="font-display text-2xl mb-2 group-hover:text-cinnabar transition-colors">
+                    {ACTIVITY_TYPE_LABEL[t]}
+                  </div>
+                  <div className="text-sm text-ink/60 italic leading-snug">
+                    {ACTIVITY_TYPE_DESCRIPTION[t]}
+                  </div>
+                </button>
+              );
+            }
+            // Pro-only type — clicking takes the user to billing, with a
+            // Pro badge instead of letting them tap into a dead end.
+            return (
+              <Link
+                key={t}
+                href={`/c/${clubSlug}/billing`}
+                className="tile-border p-6 text-left relative opacity-70 hover:opacity-100 hover:border-cinnabar/40 transition-all group"
+              >
+                <span className="absolute top-3 right-3 text-[9px] tracking-[0.2em] uppercase px-2 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar">
+                  Pro
+                </span>
+                <div className="font-display text-2xl mb-2 text-ink/60 group-hover:text-cinnabar transition-colors">
+                  {ACTIVITY_TYPE_LABEL[t]}
+                </div>
+                <div className="text-sm text-ink/50 italic leading-snug">
+                  {ACTIVITY_TYPE_DESCRIPTION[t]}
+                </div>
+                <div className="mt-3 text-xs tracking-[0.15em] uppercase text-cinnabar group-hover:underline">
+                  Upgrade to unlock →
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     );
