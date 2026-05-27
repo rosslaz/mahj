@@ -103,6 +103,18 @@ export default function BillingPage() {
     if (res.url) window.location.href = res.url;
   }
 
+  async function refreshStatus() {
+    if (working) return;
+    setWorking(true);
+    const res = await callApi('/api/billing/sync', { clubId: cb.club!.id });
+    if (res.error) {
+      alert(res.error);
+    } else {
+      await load();
+    }
+    setWorking(false);
+  }
+
   const justUpgraded = search.get('upgraded') === '1';
 
   // ============================================================
@@ -293,9 +305,22 @@ export default function BillingPage() {
         </section>
       )}
 
-      <p className="text-xs text-ink/40 italic text-center pt-6 border-t border-ink/10">
-        Subscriptions are processed securely by Stripe. Pungctual never sees your card details.
-      </p>
+      <div className="pt-6 border-t border-ink/10 space-y-3">
+        <p className="text-xs text-ink/40 italic text-center">
+          Subscriptions are processed securely by Stripe. Pungctual never sees your card details.
+        </p>
+        {!isGrandfathered && (
+          <p className="text-center">
+            <button
+              onClick={refreshStatus}
+              disabled={working}
+              className="text-[10px] tracking-[0.2em] uppercase text-ink/30 hover:text-jade disabled:opacity-50"
+            >
+              {working ? 'Refreshing…' : 'Refresh subscription status'}
+            </button>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

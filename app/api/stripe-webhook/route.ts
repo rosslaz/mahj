@@ -185,6 +185,11 @@ export async function POST(request: NextRequest) {
 /**
  * Translate a Stripe.Subscription into our club_subscriptions row.
  * Used by created, updated, and invoice.payment_succeeded handlers.
+ *
+ * The Stripe SDK has moved some fields between versions. We pull period_end
+ * and trial_end as plain "any" because the typed positions are unstable.
+ * Also: the period_end for a trialing subscription is at the trial end —
+ * Stripe sets it that way explicitly, since the "current period" IS the trial.
  */
 async function applySubscriptionState(serviceClient: any, clubId: string, sub: Stripe.Subscription) {
   // Determine which of our plans this is (monthly or annual)
@@ -193,43 +198,57 @@ async function applySubscriptionState(serviceClient: any, clubId: string, sub: S
   const annualPriceId = process.env.STRIPE_PRICE_ANNUAL;
   const plan = priceId === annualPriceId ? 'pro_annual' :
                priceId === monthlyPriceId ? 'pro_monthly' :
-               'pro_monthly';  // fallback for unknown price (e.g. they changed it in Stripe)
+               'pro_monthly';
 
   // Map Stripe status to our status
   let status: string;
   switch (sub.status) {
-    case 'trialing':
-      status = 'trialing';
-      break;
-    case 'active':
-      status = 'active';
-      break;
+    case 'trialing':           status = 'trialing'; break;
+    case 'active':             status = 'active'; break;
     case 'past_due':
-    case 'unpaid':
-      status = 'past_due';
-      break;
-    case 'canceled':
-      status = 'canceled';
-      break;
+    case 'unpaid':             status = 'past_due'; break;
+    case 'canceled':           status = 'canceled'; break;
     case 'incomplete':
-    case 'incomplete_expired':
-      // Treat these as free — checkout didn't complete
-      status = 'free';
-      break;
-    default:
-      status = 'active';
+    case 'incomplete_expired': status = 'free'; break;
+    default:                   status = 'active';
   }
 
-  await serviceClient
+  // Pull timestamps defensively. The SDK shape varies across versions; cast
+  // to any and check for valid numbers before converting.
+  const subAny = sub as any;
+  const cpeRaw = subAny.current_period_end;
+  const trialEndRaw = subAny.trial_end;
+
+  let currentPeriodEnd: string | null = null;
+  if (typeof cpeRaw === 'number' && Number.isFinite(cpeRaw) && cpeRaw > 0) {
+    currentPeriodEnd = new Date(cpeRaw * 1000).toISOString();
+  }
+  let trialEndIso: string | null = null;
+  if (typeof trialEndRaw === 'number' && Number.isFinite(trialEndRaw) && trialEndRaw > 0) {
+    trialEndIso = new Date(trialEndRaw * 1000).toISOString();
+  }
+
+  const updatePayload: any = {
+    plan,
+    status,
+    stripe_subscription_id: sub.id,
+    cancel_at_period_end: !!sub.cancel_at_period_end,
+    updated_at: new Date().toISOString(),
+  };
+  // Only set timestamp fields when we have valid values. Avoids writing
+  // null/invalid date over previously-good data.
+  if (currentPeriodEnd) updatePayload.current_period_end = currentPeriodEnd;
+  if (trialEndIso) updatePayload.trial_ends_at = trialEndIso;
+
+  console.log('[stripe-webhook] updating club_subscriptions', { clubId, payload: updatePayload });
+
+  const { error } = await serviceClient
     .from('club_subscriptions')
-    .update({
-      plan,
-      status,
-      stripe_subscription_id: sub.id,
-      current_period_end: new Date(((sub as any).current_period_end as number) * 1000).toISOString(),
-      cancel_at_period_end: sub.cancel_at_period_end,
-      trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('club_id', clubId);
+
+  if (error) {
+    console.error('[stripe-webhook] update failed:', error);
+    throw new Error(`DB update failed: ${error.message}`);
+  }
 }
