@@ -220,14 +220,13 @@ export default function BillingPage() {
 
       {/* ACTION BUTTONS — context-sensitive */}
       <section className="space-y-3">
-        {(isFree || (isCanceled && new Date(sub.current_period_end || 0) <= new Date())) && (
+        {/* Show upgrade buttons whenever the user might want to upgrade:
+            - free tier
+            - in a trial (about to be dropped)
+            - canceled but still in grace period (so they can re-up)
+            Excluded: active, past_due (use portal instead), grandfathered (no need) */}
+        {(isFree || isTrialing || isCanceled) && (
           <UpgradeButtons onSelect={startCheckout} working={working} />
-        )}
-
-        {(isTrialing || isCanceled) && new Date(sub.current_period_end || 0) > new Date() && (
-          <>
-            <UpgradeButtons onSelect={startCheckout} working={working} />
-          </>
         )}
 
         {(isActive || isPastDue) && (
