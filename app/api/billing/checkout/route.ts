@@ -82,10 +82,12 @@ export async function POST(request: NextRequest) {
     // Get-or-create the Stripe customer
     const { data: subRow } = await serviceClient
       .from('club_subscriptions')
-      .select('stripe_customer_id, status')
+      .select('stripe_customer_id, status, trial_ends_at')
       .eq('club_id', clubId)
       .maybeSingle();
     let stripeCustomerId = (subRow as any)?.stripe_customer_id as string | undefined;
+    const trialEndsAt = (subRow as any)?.trial_ends_at as string | null;
+    const currentStatus = (subRow as any)?.status as string;
 
     const stripe = new Stripe(stripeKey, { apiVersion: '2024-12-18.acacia' as any });
 
@@ -120,6 +122,27 @@ export async function POST(request: NextRequest) {
     const successUrlBySlug = `${APP_URL}/c/${slug}/billing?upgraded=1`;
     const cancelUrl = `${APP_URL}/c/${slug}/billing`;
 
+    // Honor the in-app trial: if the club is still in its Pungctual trial,
+    // tell Stripe about it so they don't get charged until trial ends.
+    //
+    // Stripe will:
+    //   - Collect the card now
+    //   - Charge $0 today
+    //   - Start the subscription immediately but in 'trialing' status
+    //   - Convert to 'active' and charge on trial_end
+    //
+    // If the trial has already expired (or there's no trial), we omit the
+    // field and Stripe charges immediately. Stripe also rejects trial_end
+    // dates less than 48 hours in the future, so we guard against that too.
+    let trialEndUnix: number | undefined = undefined;
+    if (currentStatus === 'trialing' && trialEndsAt) {
+      const trialEndDate = new Date(trialEndsAt);
+      const minTrialDate = new Date(Date.now() + 49 * 60 * 60 * 1000); // 49h to be safe
+      if (trialEndDate > minTrialDate) {
+        trialEndUnix = Math.floor(trialEndDate.getTime() / 1000);
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: stripeCustomerId,
@@ -136,6 +159,8 @@ export async function POST(request: NextRequest) {
         metadata: {
           pungctual_club_id: clubId,
         },
+        // If still in trial, pass the trial_end so Stripe defers billing
+        ...(trialEndUnix ? { trial_end: trialEndUnix } : {}),
       },
     });
 

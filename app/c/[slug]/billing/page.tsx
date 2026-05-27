@@ -226,7 +226,14 @@ export default function BillingPage() {
             - canceled but still in grace period (so they can re-up)
             Excluded: active, past_due (use portal instead), grandfathered (no need) */}
         {(isFree || isTrialing || isCanceled) && (
-          <UpgradeButtons onSelect={startCheckout} working={working} />
+          <>
+            {isTrialing && (
+              <p className="text-xs text-ink/50 italic text-center">
+                Subscribe now and you won&apos;t be charged until your trial ends on {new Date(sub.trial_ends_at!).toLocaleDateString()}. You keep your remaining trial days.
+              </p>
+            )}
+            <UpgradeButtons onSelect={startCheckout} working={working} />
+          </>
         )}
 
         {(isActive || isPastDue) && (
