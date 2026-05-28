@@ -93,6 +93,15 @@ export default function BillingPage() {
     return res.json();
   }
 
+  // Defensive date formatter: returns null if the input is missing or unparseable.
+  // Avoids the "12/31/1969" footgun when `new Date(null)` falls back to epoch.
+  function fmtDate(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString();
+  }
+
   async function startCheckout(plan: 'monthly' | 'annual') {
     if (working) return;
     setWorking(true);
@@ -198,9 +207,11 @@ export default function BillingPage() {
               <strong>{trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'}</strong> left in your trial.
               {sub.is_launch_promo && <span className="text-jade italic"> (Launch promo — extended)</span>}
             </p>
-            <p className="text-sm text-ink/50 mt-1">
-              After {new Date(sub.trial_ends_at!).toLocaleDateString()}, your club will downgrade to Free unless you subscribe.
-            </p>
+            {fmtDate(sub.trial_ends_at) && (
+              <p className="text-sm text-ink/50 mt-1">
+                After {fmtDate(sub.trial_ends_at)}, your club will downgrade to Free unless you subscribe.
+              </p>
+            )}
           </>
         )}
 
@@ -209,12 +220,20 @@ export default function BillingPage() {
             <div className="font-display text-3xl mb-1">
               Pro — {sub.plan === 'pro_annual' ? 'Annual' : 'Monthly'}
             </div>
-            <p className="text-sm text-jade italic">
-              You&apos;re subscribed. Your trial continues until {new Date(sub.trial_ends_at!).toLocaleDateString()}.
-            </p>
-            <p className="text-sm text-ink/60 mt-1">
-              First charge of {sub.plan === 'pro_annual' ? '$90' : '$9'} on {new Date(sub.trial_ends_at!).toLocaleDateString()}, then {sub.plan === 'pro_annual' ? 'annually' : 'monthly'} after that.
-            </p>
+            {fmtDate(sub.trial_ends_at) ? (
+              <>
+                <p className="text-sm text-jade italic">
+                  You&apos;re subscribed. Your trial continues until {fmtDate(sub.trial_ends_at)}.
+                </p>
+                <p className="text-sm text-ink/60 mt-1">
+                  First charge of {sub.plan === 'pro_annual' ? '$90' : '$9'} on {fmtDate(sub.trial_ends_at)}, then {sub.plan === 'pro_annual' ? 'annually' : 'monthly'} after that.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-jade italic">
+                You&apos;re subscribed. Your trial is active.
+              </p>
+            )}
             {sub.cancel_at_period_end && (
               <p className="text-sm text-cinnabar mt-2">
                 Set to cancel — Pro access ends at the end of your trial.
@@ -230,13 +249,13 @@ export default function BillingPage() {
             </div>
             {sub.cancel_at_period_end ? (
               <p className="text-sm text-cinnabar">
-                Set to cancel on {new Date(sub.current_period_end!).toLocaleDateString()}.
+                Set to cancel{fmtDate(sub.current_period_end) ? ` on ${fmtDate(sub.current_period_end)}` : ''}.
               </p>
-            ) : (
+            ) : fmtDate(sub.current_period_end) ? (
               <p className="text-sm text-ink/60">
-                Renews on {new Date(sub.current_period_end!).toLocaleDateString()}.
+                Renews on {fmtDate(sub.current_period_end)}.
               </p>
-            )}
+            ) : null}
           </>
         )}
 
@@ -280,9 +299,9 @@ export default function BillingPage() {
             - Canceled (give them a way to re-up) */}
         {(isFree || isTrialingPreSubscribe || isCanceled) && (
           <>
-            {isTrialingPreSubscribe && (
+            {isTrialingPreSubscribe && fmtDate(sub.trial_ends_at) && (
               <p className="text-xs text-ink/50 italic text-center">
-                Subscribe now and you won&apos;t be charged until your trial ends on {new Date(sub.trial_ends_at!).toLocaleDateString()}. You keep your remaining trial days.
+                Subscribe now and you won&apos;t be charged until your trial ends on {fmtDate(sub.trial_ends_at)}. You keep your remaining trial days.
               </p>
             )}
             <UpgradeButtons onSelect={startCheckout} working={working} />

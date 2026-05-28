@@ -92,12 +92,19 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
-        const sub = event.data.object as Stripe.Subscription;
-        const clubId = sub.metadata?.pungctual_club_id;
+        const eventSub = event.data.object as Stripe.Subscription;
+        const clubId = eventSub.metadata?.pungctual_club_id;
         if (!clubId) {
           console.warn(`[stripe-webhook] ${event.type} without club_id`);
           break;
         }
+        // Refetch the full subscription from the API. The event payload can
+        // be missing top-level timestamp fields (e.g. current_period_end,
+        // trial_end) depending on subscription state and SDK version. A
+        // direct retrieve() returns the authoritative object every time.
+        // Costs one extra API call per subscription state change — fine
+        // because these events fire infrequently.
+        const sub = await stripe.subscriptions.retrieve(eventSub.id);
         await applyStripeSubscriptionToDb(serviceClient, clubId, sub, "stripe-webhook");
         break;
       }
