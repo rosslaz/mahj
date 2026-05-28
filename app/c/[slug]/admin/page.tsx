@@ -37,11 +37,15 @@ export default function ClubAdminPage() {
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState<string | null>(null);
+  // Subscription state — used to surface the admin-slot cap on Free tier.
+  // We only need to know "is this club Pro" for UI gating; the server-side
+  // gate is still authoritative.
+  const [isPro, setIsPro] = useState<boolean | null>(null);
 
   async function load() {
     if (!cb.club) return;
     setLoading(true);
-    const [mRes, aRes] = await Promise.all([
+    const [mRes, aRes, sRes] = await Promise.all([
       supabase
         .from('club_members')
         .select('user_id, role, user:user_id(name, email, deleted_at)')
@@ -52,7 +56,22 @@ export default function ClubAdminPage() {
         .eq('club_id', cb.club.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('club_subscriptions')
+        .select('status, current_period_end')
+        .eq('club_id', cb.club.id)
+        .maybeSingle(),
     ]);
+
+    // Determine Pro: mirrors club_is_pro() in the DB.
+    const subData = sRes.data as any;
+    const proStatuses = ['active', 'trialing', 'grandfathered', 'past_due'];
+    const pro = subData && (
+      proStatuses.includes(subData.status) ||
+      (subData.status === 'canceled' && subData.current_period_end &&
+       new Date(subData.current_period_end) > new Date())
+    );
+    setIsPro(!!pro);
 
     const list: Member[] = ((mRes.data as any[]) || [])
       .filter((r) => r.user && !r.user.deleted_at)
@@ -129,6 +148,13 @@ export default function ClubAdminPage() {
     return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
   });
   const admins = members.filter((m) => m.role === 'owner' || m.role === 'admin');
+  // Just the admins, not counting the owner. Used for free-tier slot display.
+  const adminCount = members.filter((m) => m.role === 'admin').length;
+  const FREE_ADMIN_CAP = 1;
+  // Show the cap to free-tier clubs only. Once isPro is known to be true,
+  // the UI hides all the slot messaging.
+  const showAdminCap = isPro === false;
+  const atAdminCap = showAdminCap && adminCount >= FREE_ADMIN_CAP;
 
   return (
     <div className="space-y-12">
@@ -187,7 +213,22 @@ export default function ClubAdminPage() {
 
       {/* Members management */}
       <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Owners & Admins ({admins.length})</div>
+        <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Owners & Admins ({admins.length})</div>
+          {showAdminCap && (
+            <div className="text-[11px] tracking-[0.15em] uppercase text-ink/50 flex items-baseline gap-2">
+              <span>
+                {adminCount} of {FREE_ADMIN_CAP} admin slot{FREE_ADMIN_CAP === 1 ? '' : 's'} used
+                <span className="text-ink/35 normal-case tracking-normal italic ml-1">(Free tier)</span>
+              </span>
+              {atAdminCap && (
+                <Link href={`/c/${slug}/billing`} className="text-cinnabar hover:underline tracking-[0.15em]">
+                  Upgrade for more
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           {admins.map((a) => (
             <span key={a.user_id} className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm border ${a.role === 'owner' ? 'bg-cinnabar/10 border-cinnabar/30' : 'bg-jade/10 border-jade/30'}`}>
@@ -234,9 +275,19 @@ export default function ClubAdminPage() {
                   </div>
                 ) : (
                   <div className="flex gap-3 items-center">
-                    <button onClick={() => setRole(m.user_id, 'admin')} className="text-xs tracking-[0.15em] uppercase text-jade hover:underline">
-                      Make admin
-                    </button>
+                    {atAdminCap ? (
+                      <Link
+                        href={`/c/${slug}/billing`}
+                        title="Free clubs allow 1 admin. Upgrade to Pro for unlimited."
+                        className="text-xs tracking-[0.15em] uppercase text-ink/30 hover:text-cinnabar hover:underline"
+                      >
+                        Pro for more admins
+                      </Link>
+                    ) : (
+                      <button onClick={() => setRole(m.user_id, 'admin')} className="text-xs tracking-[0.15em] uppercase text-jade hover:underline">
+                        Make admin
+                      </button>
+                    )}
                     <button onClick={() => removeMember(m.user_id)} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar">
                       Remove
                     </button>
