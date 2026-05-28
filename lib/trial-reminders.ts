@@ -16,15 +16,9 @@
 //   - If send fails, we don't stamp (will retry tomorrow)
 //   - Errors are logged but don't fail the cron
 
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pungctual.com';
-
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 type ClubRow = {
   id: string;
@@ -44,7 +38,7 @@ export type TrialReminderResult = {
 };
 
 export async function runTrialReminderSweep(): Promise<TrialReminderResult> {
-  const supabase = svc();
+  const supabase = getServiceSupabase();
   const result: TrialReminderResult = { found: 0, sent7d: 0, sent1d: 0, errors: 0 };
 
   const now = Date.now();

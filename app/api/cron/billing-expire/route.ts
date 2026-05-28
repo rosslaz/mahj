@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { runTrialReminderSweep } from '@/lib/trial-reminders';
 
 // Daily cron: handles trial-related billing transitions.
@@ -39,12 +39,6 @@ import { runTrialReminderSweep } from '@/lib/trial-reminders';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 export async function GET(request: NextRequest) {
   // Verify the request came from Vercel cron (or our manual test path)
   const authHeader = request.headers.get('authorization');
@@ -53,7 +47,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = svc();
+  const supabase = getServiceSupabase();
   const now = new Date().toISOString();
 
   // Step 1: send trial-ending reminders. Doesn't change subscription state,

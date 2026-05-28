@@ -1,7 +1,7 @@
 'use server';
 
 import { randomBytes } from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { dispatchClubMemberJoined } from '@/lib/notifications';
 import { canAddMember, canSendEmailInvites } from '@/lib/billing';
@@ -15,12 +15,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pungctual.com';
 // Service-role client. Used only by acceptClubInvite — the accepting user
 // can't read the invite via RLS (they aren't a club member yet) and can't
 // write to club_members under the standard policies either.
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 function generateToken(): string {
   // 32 random bytes → ~43 chars in base64url. Plenty of entropy.
   return randomBytes(INVITE_TOKEN_BYTES)
@@ -266,7 +260,7 @@ export async function acceptClubInvite(token: string): Promise<Result<AcceptResu
   if (!userId) return { ok: false, error: 'Not signed in.' };
   if (!token || token.length < 10) return { ok: false, error: 'Invalid invite token.' };
 
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   // Look up the invite by token. No RLS via service role.
   const { data: inviteRow } = await serviceClient

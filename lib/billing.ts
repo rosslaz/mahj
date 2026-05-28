@@ -4,7 +4,7 @@
 // keeps the logic in one place so changing pricing tiers later means
 // editing one file, not searching across the codebase.
 
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 // Free-tier limits. Tightening or relaxing these is a single-file change.
 export const FREE_TIER_LIMITS = {
@@ -27,12 +27,6 @@ export const LAUNCH_PROMO_TRIAL_DAYS = 30;
 // (launch_promo_counter.cap) so changing it doesn't require a code deploy.
 // The atomic claim happens via the claim_launch_promo_slot RPC.
 
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 export type ClubBillingStatus = {
   isPro: boolean;
   plan: 'free' | 'pro_monthly' | 'pro_annual' | 'pro_grandfathered';
@@ -50,7 +44,7 @@ export type ClubBillingStatus = {
  * defaults to free.
  */
 export async function getClubBillingStatus(clubId: string): Promise<ClubBillingStatus> {
-  const supabase = svc();
+  const supabase = getServiceSupabase();
   const { data } = await supabase
     .from('club_subscriptions')
     .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo')
@@ -108,7 +102,7 @@ export async function canAddMember(clubId: string, currentCount?: number): Promi
   if (currentCount !== undefined) {
     count = currentCount;
   } else {
-    const supabase = svc();
+    const supabase = getServiceSupabase();
     const { data, error } = await supabase.rpc('club_member_count', { p_club_id: clubId });
     if (error) {
       console.error('[canAddMember] club_member_count RPC failed:', error);
@@ -148,7 +142,7 @@ export async function canCreateActivity(
   }
 
   // Free tier: only 1 activity total
-  const supabase = svc();
+  const supabase = getServiceSupabase();
   const { data: count, error } = await supabase.rpc('club_activity_count', { p_club_id: clubId });
   if (error) {
     console.error('[canCreateActivity] club_activity_count RPC failed:', error);
@@ -195,7 +189,7 @@ export async function canPromoteAdmin(clubId: string): Promise<GateResult> {
   const status = await getClubBillingStatus(clubId);
   if (status.isPro) return { allowed: true };
 
-  const supabase = svc();
+  const supabase = getServiceSupabase();
   const { data: count, error } = await supabase.rpc('club_admin_count', { p_club_id: clubId });
   if (error) {
     console.error('[canPromoteAdmin] club_admin_count RPC failed:', error);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 
@@ -13,12 +13,6 @@ import { createServerClient } from '@supabase/ssr';
 // Returns: { url: string } or { error: string }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pungctual.com';
-
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,7 +51,7 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabaseSSR.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-    const serviceClient = svc();
+    const serviceClient = getServiceSupabase();
 
     // Look up our internal user id + email
     const { data: userRow } = await serviceClient

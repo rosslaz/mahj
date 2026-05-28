@@ -1,16 +1,10 @@
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { getCallerUserId } from '@/lib/supabase';
 import { STANDARD_TRIAL_DAYS, LAUNCH_PROMO_TRIAL_DAYS } from '@/lib/billing';
 
 type Result = { ok: true } | { ok: false; error: string };
-
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 /**
  * Provision the subscription row for a newly-created club.
@@ -33,7 +27,7 @@ export async function provisionClubSubscription(clubId: string): Promise<Result>
   const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   // Verify the caller actually owns this club (cheap protection against
   // someone passing an arbitrary club_id).
@@ -66,7 +60,7 @@ export async function ensureClubSubscription(clubId: string): Promise<Result> {
 }
 
 async function ensureClubSubscriptionImpl(clubId: string): Promise<Result> {
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   // Idempotent: if a subscription row already exists, don't re-provision
   const { data: existing } = await serviceClient

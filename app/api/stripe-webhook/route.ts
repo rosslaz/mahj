@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
+import { applyStripeSubscriptionToDb } from '@/lib/stripe-sync';
 
 // Stripe webhook receiver.
 //
@@ -17,12 +18,6 @@ import { createClient } from '@supabase/supabase-js';
 //   - customer.subscription.deleted    — fully canceled
 //   - invoice.payment_succeeded        — renewal payment ok (update period end)
 //   - invoice.payment_failed           — payment failed, sub goes past_due
-
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 // App Router automatically gives us the raw body via request.text(). No need
 // to configure bodyParser like in Pages Router.
@@ -52,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature.' }, { status: 400 });
   }
 
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   // Idempotency: have we processed this event before?
   const { data: existing } = await serviceClient
@@ -103,7 +98,7 @@ export async function POST(request: NextRequest) {
           console.warn(`[stripe-webhook] ${event.type} without club_id`);
           break;
         }
-        await applySubscriptionState(serviceClient, clubId, sub);
+        await applyStripeSubscriptionToDb(serviceClient, clubId, sub, "stripe-webhook");
         break;
       }
 
@@ -136,7 +131,7 @@ export async function POST(request: NextRequest) {
         const sub = await stripe.subscriptions.retrieve(subId);
         const clubId = sub.metadata?.pungctual_club_id;
         if (!clubId) break;
-        await applySubscriptionState(serviceClient, clubId, sub);
+        await applyStripeSubscriptionToDb(serviceClient, clubId, sub, "stripe-webhook");
         break;
       }
 
@@ -182,73 +177,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Translate a Stripe.Subscription into our club_subscriptions row.
- * Used by created, updated, and invoice.payment_succeeded handlers.
- *
- * The Stripe SDK has moved some fields between versions. We pull period_end
- * and trial_end as plain "any" because the typed positions are unstable.
- * Also: the period_end for a trialing subscription is at the trial end —
- * Stripe sets it that way explicitly, since the "current period" IS the trial.
- */
-async function applySubscriptionState(serviceClient: any, clubId: string, sub: Stripe.Subscription) {
-  // Determine which of our plans this is (monthly or annual)
-  const priceId = sub.items.data[0]?.price.id;
-  const monthlyPriceId = process.env.STRIPE_PRICE_MONTHLY;
-  const annualPriceId = process.env.STRIPE_PRICE_ANNUAL;
-  const plan = priceId === annualPriceId ? 'pro_annual' :
-               priceId === monthlyPriceId ? 'pro_monthly' :
-               'pro_monthly';
-
-  // Map Stripe status to our status
-  let status: string;
-  switch (sub.status) {
-    case 'trialing':           status = 'trialing'; break;
-    case 'active':             status = 'active'; break;
-    case 'past_due':
-    case 'unpaid':             status = 'past_due'; break;
-    case 'canceled':           status = 'canceled'; break;
-    case 'incomplete':
-    case 'incomplete_expired': status = 'free'; break;
-    default:                   status = 'active';
-  }
-
-  // Pull timestamps defensively. The SDK shape varies across versions; cast
-  // to any and check for valid numbers before converting.
-  const subAny = sub as any;
-  const cpeRaw = subAny.current_period_end;
-  const trialEndRaw = subAny.trial_end;
-
-  let currentPeriodEnd: string | null = null;
-  if (typeof cpeRaw === 'number' && Number.isFinite(cpeRaw) && cpeRaw > 0) {
-    currentPeriodEnd = new Date(cpeRaw * 1000).toISOString();
-  }
-  let trialEndIso: string | null = null;
-  if (typeof trialEndRaw === 'number' && Number.isFinite(trialEndRaw) && trialEndRaw > 0) {
-    trialEndIso = new Date(trialEndRaw * 1000).toISOString();
-  }
-
-  const updatePayload: any = {
-    plan,
-    status,
-    stripe_subscription_id: sub.id,
-    cancel_at_period_end: !!sub.cancel_at_period_end,
-    updated_at: new Date().toISOString(),
-  };
-  // Only set timestamp fields when we have valid values. Avoids writing
-  // null/invalid date over previously-good data.
-  if (currentPeriodEnd) updatePayload.current_period_end = currentPeriodEnd;
-  if (trialEndIso) updatePayload.trial_ends_at = trialEndIso;
-
-  console.log('[stripe-webhook] updating club_subscriptions', { clubId, payload: updatePayload });
-
-  const { error } = await serviceClient
-    .from('club_subscriptions')
-    .update(updatePayload)
-    .eq('club_id', clubId);
-
-  if (error) {
-    console.error('[stripe-webhook] update failed:', error);
-    throw new Error(`DB update failed: ${error.message}`);
-  }
-}

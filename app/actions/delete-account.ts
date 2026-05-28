@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { dispatchEventHostReassigned } from '@/lib/notifications';
 
@@ -10,12 +10,6 @@ type Result = { ok: true } | { ok: false; error: string };
 //   - Deleting the auth.users row (requires admin)
 //   - Reassigning hosted events to club owners (cross-user)
 //   - Cascading cleanup across tables
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 /**
  * Delete the caller's account.
  *
@@ -58,7 +52,7 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
   const userName = (userRow as any).name as string;
   const authUserId = (userRow as any).auth_user_id as string | null;
 
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   // ------------------------------------------------------------
   // Step 1: Reassign hosted events

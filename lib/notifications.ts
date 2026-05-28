@@ -15,17 +15,11 @@
  * never break the caller's main action.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { sendPushToUser, type NotificationCategory } from './push-server';
 
 // Service-role client. Bypasses RLS so we can query across users to find
 // recipients, event hosts, club admins, etc. NEVER expose this elsewhere.
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 // Format an event date for notification bodies.
 //   "Mar 17" — short, parseable at a glance
 function formatEventDateShort(isoDate: string): string {
@@ -48,7 +42,7 @@ function clubAdminUrl(clubSlug: string): string {
 // Helper: load an event with the related rows we need for every notification.
 // Returns null if the event no longer exists.
 async function loadEventContext(eventId: string) {
-  const { data } = await svc()
+  const { data } = await getServiceSupabase()
     .from('events')
     .select(`
       id, name, date, host_player_id,
@@ -64,7 +58,7 @@ async function loadEventContext(eventId: string) {
 
 // Helper: get a user's display name. Used for "Sarah signed up" etc.
 async function getUserName(userId: string): Promise<string | null> {
-  const { data } = await svc()
+  const { data } = await getServiceSupabase()
     .from('users')
     .select('name')
     .eq('id', userId)
@@ -88,7 +82,7 @@ export async function dispatchSignupCreated(opts: {
   actorUserId: string;
   status: 'approved' | 'pending';
 }): Promise<void> {
-  const { data: signup } = await svc()
+  const { data: signup } = await getServiceSupabase()
     .from('night_signups')
     .select('id, player_id, event_id')
     .eq('id', opts.signupId)
@@ -166,7 +160,7 @@ export async function dispatchSignupApproved(opts: {
   signupId: string;
   actorUserId: string;
 }): Promise<void> {
-  const { data: signup } = await svc()
+  const { data: signup } = await getServiceSupabase()
     .from('night_signups')
     .select('id, player_id, event_id')
     .eq('id', opts.signupId)
@@ -370,7 +364,7 @@ export async function dispatchClubMemberJoined(opts: {
   clubId: string;
   newMemberUserId: string;
 }): Promise<void> {
-  const { data: club } = await svc()
+  const { data: club } = await getServiceSupabase()
     .from('clubs')
     .select('id, slug, name')
     .eq('id', opts.clubId)
@@ -378,7 +372,7 @@ export async function dispatchClubMemberJoined(opts: {
   if (!club) return;
 
   // Find all admins/owners of this club
-  const { data: adminRows } = await svc()
+  const { data: adminRows } = await getServiceSupabase()
     .from('club_members')
     .select('user_id, role')
     .eq('club_id', opts.clubId)
@@ -421,7 +415,7 @@ export async function dispatchClubMemberLeft(opts: {
   // Skip per our design.
   if (opts.leftUserId !== opts.actorUserId) return;
 
-  const { data: club } = await svc()
+  const { data: club } = await getServiceSupabase()
     .from('clubs')
     .select('id, slug, name')
     .eq('id', opts.clubId)
@@ -429,7 +423,7 @@ export async function dispatchClubMemberLeft(opts: {
   if (!club) return;
 
   // Notify admins (the leaving user obviously knows they left)
-  const { data: adminRows } = await svc()
+  const { data: adminRows } = await getServiceSupabase()
     .from('club_members')
     .select('user_id, role')
     .eq('club_id', opts.clubId)
@@ -500,7 +494,7 @@ export async function dispatchEventReminder(eventId: string): Promise<{
 
   // Need the address fields for the reminder body — not loaded by
   // loadEventContext. Refetch the row with the address columns.
-  const { data: eventFull } = await svc()
+  const { data: eventFull } = await getServiceSupabase()
     .from('events')
     .select('id, start_time, street, city, state')
     .eq('id', eventId)
@@ -508,7 +502,7 @@ export async function dispatchEventReminder(eventId: string): Promise<{
   if (!eventFull) return { attendeesAttempted: 0, pushesDelivered: 0 };
 
   // Find approved attendees
-  const { data: signups } = await svc()
+  const { data: signups } = await getServiceSupabase()
     .from('night_signups')
     .select('player_id')
     .eq('event_id', eventId)
@@ -616,7 +610,7 @@ export async function runReminderSweep(opts?: { todayDateOverride?: string }): P
   // Query candidates: events scheduled for today that haven't been reminded
   // yet. We don't filter on start_time here — the cron runs once in the
   // morning, and even early-day events should get a heads-up.
-  const { data: candidates, error: qErr } = await svc()
+  const { data: candidates, error: qErr } = await getServiceSupabase()
     .from('events')
     .select('id, name, date')
     .eq('date', todayDate)
@@ -649,7 +643,7 @@ export async function runReminderSweep(opts?: { todayDateOverride?: string }): P
           // Stamp the timestamp even on zero-attendee events so we don't
           // re-query them on the next cron tick.
           const stampNow = new Date().toISOString();
-          await svc()
+          await getServiceSupabase()
             .from('events')
             .update({ reminder_sent_at: stampNow })
             .eq('id', ev.id);

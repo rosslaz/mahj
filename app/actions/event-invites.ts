@@ -1,7 +1,7 @@
 'use server';
 
 import { randomBytes } from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/supabase-service';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { canSendEmailInvites } from '@/lib/billing';
 import {
@@ -21,12 +21,6 @@ const INVITE_TOKEN_BYTES = 32;
 //     not be allowed to write that field directly under RLS)
 //   - Looking up users by email to invite club members who aren't yet
 //     in the club (the "outside email" path)
-function svc() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 function generateToken(): string {
   return randomBytes(INVITE_TOKEN_BYTES)
     .toString('base64')
@@ -76,7 +70,7 @@ export async function sendEventInvitations(opts: {
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
   const supabase = getSupabase();
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   // Load event and authorize
   const { data: eventRow } = await supabase
@@ -281,7 +275,7 @@ export async function acceptEventInvitation(eventId: string): Promise<Result> {
   const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   const { data: inviteRow } = await serviceClient
     .from('event_invites')
@@ -349,7 +343,7 @@ export async function declineEventInvitation(eventId: string): Promise<Result> {
   const userId = await getCallerUserId();
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
-  const serviceClient = svc();
+  const serviceClient = getServiceSupabase();
 
   const { data: inviteRow } = await serviceClient
     .from('event_invites')
