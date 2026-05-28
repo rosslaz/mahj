@@ -38,12 +38,22 @@ export default function JoinClubPage() {
 
     setSubmitting(true);
 
-    const { data: clubData } = await supabase
-      .from('clubs')
-      .select('id, slug, name')
-      .eq('join_code', cleaned)
-      .is('deleted_at', null)
-      .maybeSingle();
+    // Look up the club by join code via a SECURITY DEFINER RPC. We can't do
+    // a direct `select from clubs where join_code = ?` because the clubs RLS
+    // policy hides private clubs from non-members — possessing the code is
+    // the authorization, but RLS doesn't know that. The RPC bypasses RLS and
+    // returns only minimal fields.
+    const { data: rpcData, error: lookupErr } = await supabase
+      .rpc('lookup_club_by_join_code', { p_code: cleaned });
+
+    if (lookupErr) {
+      setError('Could not look up that code. Try again.');
+      setSubmitting(false);
+      return;
+    }
+
+    // RPC returns a table (array). Take the first row.
+    const clubData = Array.isArray(rpcData) ? rpcData[0] : rpcData;
 
     if (!clubData) {
       setError('No club found for that code.');
