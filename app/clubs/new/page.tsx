@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/use-auth';
 import { slugify } from '@/lib/slug';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
-import { provisionClubSubscription } from '@/app/actions/billing-provision';
+import { provisionClubSubscription, getNewClubTrialEligibility } from '@/app/actions/billing-provision';
 
 function randomSuffix(len = 4): string {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -30,6 +30,28 @@ export default function NewClubPage() {
   const [addr, setAddr] = useState<AddressFieldsValue>({ street: '', city: '', state: '', zip: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tell the user upfront what subscription state their new club will start in.
+  // null = still loading; failures default to 'free' (conservative — under-promises).
+  const [eligibility, setEligibility] = useState<
+    | null
+    | { kind: 'grandfathered' }
+    | { kind: 'trial'; days: number }
+    | { kind: 'free' }
+    | { kind: 'not-signed-in' }
+  >(null);
+
+  useEffect(() => {
+    if (!auth.userId) return;
+    let cancelled = false;
+    getNewClubTrialEligibility().then((e) => {
+      if (!cancelled) setEligibility(e);
+    }).catch((err) => {
+      console.error('[new-club] eligibility fetch failed:', err);
+      if (!cancelled) setEligibility({ kind: 'free' });
+    });
+    return () => { cancelled = true; };
+  }, [auth.userId]);
 
   if (auth.loading) return <p className="text-ink/40 italic">Loading…</p>;
   if (!auth.email || !auth.userId) {
@@ -128,6 +150,41 @@ export default function NewClubPage() {
         <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mt-4 mb-3">A new group</p>
         <h1 className="font-display text-5xl">Create Club</h1>
       </header>
+
+      {/* Eligibility banner: set expectations upfront about what plan the new
+          club will start on. Especially important when a user is creating
+          their 2nd+ club — they shouldn't be surprised that this one starts
+          on Free instead of getting another trial. */}
+      {eligibility && eligibility.kind === 'trial' && (
+        <div className="tile-border border-bamboo/40 bg-bamboo/5 p-5">
+          <p className="text-sm">
+            <strong>Your new club starts on a {eligibility.days}-day Pro trial.</strong>{' '}
+            <span className="text-ink/60">
+              All Pro features unlocked: unlimited members, unlimited activities, tournaments, classes, and email invitations. No card required.
+            </span>
+          </p>
+        </div>
+      )}
+      {eligibility && eligibility.kind === 'free' && (
+        <div className="tile-border border-gold/40 bg-gold/5 p-5">
+          <p className="text-sm">
+            <strong>This club will start on the Free plan.</strong>{' '}
+            <span className="text-ink/60">
+              The Pungctual Pro trial is one per person — you&apos;ve already used yours. Free clubs are limited to 1 activity (League or Open Play), 5 members, and 1 admin. You can upgrade any time from the club&apos;s billing page.
+            </span>
+          </p>
+        </div>
+      )}
+      {eligibility && eligibility.kind === 'grandfathered' && (
+        <div className="tile-border border-jade/40 bg-jade/5 p-5">
+          <p className="text-sm">
+            <strong>This club will get lifetime Pro access</strong>{' '}
+            <span className="text-ink/60">
+              as a thank-you for being part of the Pungctual team.
+            </span>
+          </p>
+        </div>
+      )}
 
       <form onSubmit={create} className="tile-border p-7 space-y-5">
         <div>

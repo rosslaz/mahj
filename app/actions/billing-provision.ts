@@ -11,8 +11,11 @@ type Result = { ok: true } | { ok: false; error: string };
  *
  * Rules:
  *   - Owner email ends in @pungctual.com → grandfathered (lifetime Pro)
- *   - Otherwise, gets a Pro trial:
- *       - First 10 clubs after launch → 30-day trial (launch promo)
+ *   - Owner already has another club → starts on Free immediately
+ *     (per-user trial policy: each user gets ONE trial, attached to their
+ *     first club)
+ *   - Otherwise (first club for this owner) → gets a Pro trial:
+ *       - First 10 clubs system-wide → 30-day trial (launch promo)
  *       - Everyone else → 14-day trial
  *
  * The trial does NOT require a card. After it ends, the webhook handler
@@ -59,6 +62,52 @@ export async function ensureClubSubscription(clubId: string): Promise<Result> {
   return ensureClubSubscriptionImpl(clubId);
 }
 
+/**
+ * Will the calling user's next-created club start on a Pro trial, or on Free?
+ *
+ * Used by the new-club page to set expectations upfront. The actual provisioning
+ * happens server-side at create time; this is just a heads-up.
+ *
+ * Returns:
+ *   - kind: 'grandfathered' — @pungctual.com, will get lifetime Pro
+ *   - kind: 'trial'         — first club, will get the standard trial
+ *   - kind: 'free'          — has prior clubs, will start on Free
+ *   - kind: 'not-signed-in' — no caller
+ */
+export async function getNewClubTrialEligibility(): Promise<
+  | { kind: 'grandfathered' }
+  | { kind: 'trial'; days: number }
+  | { kind: 'free' }
+  | { kind: 'not-signed-in' }
+> {
+  const userId = await getCallerUserId();
+  if (!userId) return { kind: 'not-signed-in' };
+
+  const serviceClient = getServiceSupabase();
+
+  // Grandfather check
+  const { data: user } = await serviceClient
+    .from('users')
+    .select('email')
+    .eq('id', userId)
+    .maybeSingle();
+  const email = ((user as any)?.email || '').toLowerCase();
+  if (email.endsWith('@pungctual.com')) return { kind: 'grandfathered' };
+
+  // Prior-clubs check (mirrors the provisioning logic — includes soft-deleted)
+  const { data: priorClubs } = await serviceClient
+    .from('clubs')
+    .select('id')
+    .eq('owner_user_id', userId)
+    .limit(1);
+  if ((priorClubs?.length ?? 0) > 0) return { kind: 'free' };
+
+  // First club — trial. We DON'T claim a launch promo slot here (that's a
+  // one-shot atomic claim that should only fire at actual create time).
+  // Just report the standard trial length so the UI can preview it.
+  return { kind: 'trial', days: STANDARD_TRIAL_DAYS };
+}
+
 async function ensureClubSubscriptionImpl(clubId: string): Promise<Result> {
   const serviceClient = getServiceSupabase();
 
@@ -99,7 +148,61 @@ async function ensureClubSubscriptionImpl(clubId: string): Promise<Result> {
     return { ok: true };
   }
 
-  // Launch promo: atomically claim a slot if available.
+  // Per-user trial policy: each user gets ONE trial in their lifetime,
+  // attached to their FIRST club. Subsequent clubs they create start on
+  // the Free plan immediately.
+  //
+  // Why this exists: without this, a user could create N clubs to get N
+  // separate trials and N separate "1 free activity" slots after each
+  // expires. Capping the trial at the user level closes that exploit
+  // without restricting how many clubs a user can own.
+  //
+  // Detection: does the user own any OTHER club besides this one? Any
+  // existing ownership means they've already had their trial. We INCLUDE
+  // soft-deleted clubs (no deleted_at filter) — otherwise a user could
+  // chain delete-then-create to farm fresh trials.
+  //
+  // Race window: a user creating two clubs in the same sub-second window
+  // could pass the "no prior clubs" check on both before either row is
+  // inserted, getting two trials. Acceptable for now — exploitation
+  // requires programmatic timing and yields one extra 14-day trial. If
+  // this becomes a real problem, add a periodic cleanup that downgrades
+  // duplicate trialing rows per owner.
+  const { data: priorClubs, error: priorErr } = await serviceClient
+    .from('clubs')
+    .select('id')
+    .eq('owner_user_id', ownerId)
+    .neq('id', clubId)
+    .limit(1);
+  if (priorErr) {
+    // Fail closed on this lookup error — if we can't tell, default to "no
+    // trial." That's the conservative path (worst case: a user who deserved
+    // a trial doesn't get one and contacts support). The alternative
+    // (defaulting to "give a trial") could be exploited.
+    console.error('[provision] prior-clubs lookup failed:', priorErr);
+    const { error } = await serviceClient.from('club_subscriptions').insert({
+      club_id: clubId,
+      plan: 'free',
+      status: 'free',
+    });
+    if (error && error.code !== '23505') return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  const hasPriorClubs = (priorClubs?.length ?? 0) > 0;
+
+  if (hasPriorClubs) {
+    // Not their first club — start on Free with no trial.
+    const { error } = await serviceClient.from('club_subscriptions').insert({
+      club_id: clubId,
+      plan: 'free',
+      status: 'free',
+    });
+    if (error && error.code !== '23505') return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
+  // First club for this user — they get a trial. Launch promo: atomically
+  // claim a slot if available (first 10 clubs system-wide get the longer trial).
   const { data: claimedSlot } = await serviceClient.rpc('claim_launch_promo_slot');
   const claimedPromo = !!claimedSlot;
 
