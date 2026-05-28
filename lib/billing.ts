@@ -23,12 +23,9 @@ export const FREE_TIER_LIMITS = {
 // Standard trial length. Launch-promo clubs get more.
 export const STANDARD_TRIAL_DAYS = 14;
 export const LAUNCH_PROMO_TRIAL_DAYS = 30;
-export const LAUNCH_PROMO_CAP = 10;
-
-// Pro plan price strings — only used for human labels. The actual IDs
-// come from Stripe via env vars (see api/billing routes).
-export const PRO_MONTHLY_PRICE_LABEL = '$9/month';
-export const PRO_ANNUAL_PRICE_LABEL = '$90/year';
+// Note: the launch promo cap (currently 10 clubs) lives in the DB
+// (launch_promo_counter.cap) so changing it doesn't require a code deploy.
+// The atomic claim happens via the claim_launch_promo_slot RPC.
 
 function svc() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -92,16 +89,6 @@ export async function getClubBillingStatus(clubId: string): Promise<ClubBillingS
     isLaunchPromo: !!r.is_launch_promo,
     isGrandfathered: r.status === 'grandfathered' || r.plan === 'pro_grandfathered',
   };
-}
-
-/**
- * Quick boolean check. Same logic as getClubBillingStatus().isPro but cheaper
- * call since it can use the DB function directly.
- */
-export async function isClubPro(clubId: string): Promise<boolean> {
-  const supabase = svc();
-  const { data } = await supabase.rpc('club_is_pro', { p_club_id: clubId });
-  return !!data;
 }
 
 // ============================================================

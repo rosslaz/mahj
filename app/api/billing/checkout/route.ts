@@ -111,15 +111,16 @@ export async function POST(request: NextRequest) {
 
     // Create the checkout session
     const priceId = plan === 'monthly' ? priceMonthly : priceAnnual;
-    const successUrl = `${APP_URL}/c/${(club as any).id}/billing?upgraded=1`;
-    // Actually we need the slug. Look it up.
+
+    // Look up the slug so the success/cancel URLs go to the human-readable
+    // /c/{slug}/billing route the user actually navigates by, not the UUID.
     const { data: slugRow } = await serviceClient
       .from('clubs')
       .select('slug')
       .eq('id', clubId)
       .maybeSingle();
     const slug = (slugRow as any)?.slug;
-    const successUrlBySlug = `${APP_URL}/c/${slug}/billing?upgraded=1`;
+    const successUrl = `${APP_URL}/c/${slug}/billing?upgraded=1`;
     const cancelUrl = `${APP_URL}/c/${slug}/billing`;
 
     // Honor the in-app trial: if the club is still in its Pungctual trial,
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       customer: stripeCustomerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrlBySlug,
+      success_url: successUrl,
       cancel_url: cancelUrl,
       allow_promotion_codes: true,
       // Important: link the subscription back to our internal IDs via metadata.
