@@ -117,10 +117,24 @@ export async function canAddMember(clubId: string, currentCount?: number): Promi
   const status = await getClubBillingStatus(clubId);
   if (status.isPro) return { allowed: true };
 
-  const supabase = svc();
-  const count = currentCount ?? (await supabase
-    .rpc('club_member_count', { p_club_id: clubId })
-    .then((r: any) => r.data ?? 0));
+  let count: number;
+  if (currentCount !== undefined) {
+    count = currentCount;
+  } else {
+    const supabase = svc();
+    const { data, error } = await supabase.rpc('club_member_count', { p_club_id: clubId });
+    if (error) {
+      console.error('[canAddMember] club_member_count RPC failed:', error);
+      // Fail closed — don't silently allow free-tier overflow on transient
+      // RPC errors. User sees a retry-able error rather than getting through
+      // a gate that would normally block them.
+      return {
+        allowed: false,
+        reason: 'Could not verify member limit. Try again in a moment.',
+      };
+    }
+    count = (data as number | null) ?? 0;
+  }
 
   if (count >= FREE_TIER_LIMITS.maxMembers) {
     return {
@@ -148,7 +162,14 @@ export async function canCreateActivity(
 
   // Free tier: only 1 activity total
   const supabase = svc();
-  const { data: count } = await supabase.rpc('club_activity_count', { p_club_id: clubId });
+  const { data: count, error } = await supabase.rpc('club_activity_count', { p_club_id: clubId });
+  if (error) {
+    console.error('[canCreateActivity] club_activity_count RPC failed:', error);
+    return {
+      allowed: false,
+      reason: 'Could not verify activity limit. Try again in a moment.',
+    };
+  }
   if ((count ?? 0) >= FREE_TIER_LIMITS.maxActivities) {
     return {
       allowed: false,
@@ -188,7 +209,14 @@ export async function canPromoteAdmin(clubId: string): Promise<GateResult> {
   if (status.isPro) return { allowed: true };
 
   const supabase = svc();
-  const { data: count } = await supabase.rpc('club_admin_count', { p_club_id: clubId });
+  const { data: count, error } = await supabase.rpc('club_admin_count', { p_club_id: clubId });
+  if (error) {
+    console.error('[canPromoteAdmin] club_admin_count RPC failed:', error);
+    return {
+      allowed: false,
+      reason: 'Could not verify admin limit. Try again in a moment.',
+    };
+  }
   if ((count ?? 0) >= FREE_TIER_LIMITS.maxAdmins) {
     return {
       allowed: false,

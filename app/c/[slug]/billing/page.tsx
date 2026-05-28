@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
+import { ensureClubSubscription } from '@/app/actions/billing-provision';
 
 type SubscriptionRow = {
   plan: 'free' | 'pro_monthly' | 'pro_annual' | 'pro_grandfathered';
@@ -43,11 +44,24 @@ export default function BillingPage() {
 
   const load = useCallback(async () => {
     if (!cb.club) return;
-    const { data } = await supabase
-      .from('club_subscriptions')
-      .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo, stripe_subscription_id')
-      .eq('club_id', cb.club.id)
-      .maybeSingle();
+    const fetchOnce = async () =>
+      supabase
+        .from('club_subscriptions')
+        .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo, stripe_subscription_id')
+        .eq('club_id', cb.club!.id)
+        .maybeSingle();
+
+    let { data } = await fetchOnce();
+
+    // Self-heal: if no subscription row exists (e.g. initial provisioning
+    // failed silently), trigger provisioning and refetch. Avoids putting the
+    // owner in a permanently-stuck state where the page can't show them
+    // anything actionable.
+    if (!data) {
+      await ensureClubSubscription(cb.club!.id);
+      ({ data } = await fetchOnce());
+    }
+
     setSub((data as any) ?? null);
     setLoading(false);
   }, [cb.club, supabase]);

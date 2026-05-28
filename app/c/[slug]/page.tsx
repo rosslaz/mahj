@@ -46,6 +46,7 @@ export default function ClubOverview() {
   const [subState, setSubState] = useState<{
     status: string;
     trialEndsAt: string | null;
+    currentPeriodEnd: string | null;
     hasStripeSub: boolean;
   } | null>(null);
 
@@ -136,7 +137,7 @@ export default function ClubOverview() {
     // Subscription state for the Pro/Trial badge
     const { data: subData } = await supabase
       .from('club_subscriptions')
-      .select('status, trial_ends_at, stripe_subscription_id')
+      .select('status, trial_ends_at, current_period_end, stripe_subscription_id')
       .eq('club_id', cb.club!.id)
       .maybeSingle();
     if (subData) {
@@ -144,6 +145,7 @@ export default function ClubOverview() {
       setSubState({
         status: s.status,
         trialEndsAt: s.trial_ends_at,
+        currentPeriodEnd: s.current_period_end,
         hasStripeSub: !!s.stripe_subscription_id,
       });
     } else {
@@ -295,7 +297,7 @@ function SubscriptionBadge({
   slug,
   isOwner,
 }: {
-  subState: { status: string; trialEndsAt: string | null; hasStripeSub: boolean };
+  subState: { status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; hasStripeSub: boolean };
   slug: string;
   isOwner: boolean;
 }) {
@@ -389,13 +391,13 @@ function BillingBanner({
   activityCount,
   adminCount,
 }: {
-  subState: { status: string; trialEndsAt: string | null; hasStripeSub: boolean };
+  subState: { status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; hasStripeSub: boolean };
   slug: string;
   memberCount: number;
   activityCount: number;
   adminCount: number;
 }) {
-  const { status, trialEndsAt, hasStripeSub } = subState;
+  const { status, trialEndsAt, currentPeriodEnd, hasStripeSub } = subState;
 
   // Case 1: trialing pre-subscribe, last week
   if (status === 'trialing' && !hasStripeSub && trialEndsAt) {
@@ -428,14 +430,20 @@ function BillingBanner({
 
   // Case 2: canceled but still in current period
   if (status === 'canceled') {
-    // Banner says "ends on X" with renew CTA. Don't need to compute period
-    // end here — billing page handles the precise date. Keep simple.
+    // Only show this banner if the grace period is still active. If
+    // current_period_end has passed, the webhook should have downgraded
+    // status to 'free' — if it hasn't, the page still shows correctly
+    // (no banner) and the sync endpoint can recover state on the billing page.
+    const inGracePeriod = currentPeriodEnd && new Date(currentPeriodEnd) > new Date();
+    if (!inGracePeriod) return null;
+
+    const endDateStr = new Date(currentPeriodEnd).toLocaleDateString();
     return (
       <div className="tile-border p-5 flex items-start gap-4 flex-wrap border-cinnabar/40 bg-cinnabar/5">
         <div className="flex-1 min-w-[260px]">
           <p className="text-sm">
-            <strong>Your Pro subscription is set to end.</strong>{' '}
-            <span className="text-ink/60">When it does, your club drops to Free. Existing data stays — but new members or activities beyond free limits will be paused.</span>
+            <strong>Your Pro subscription is set to end on {endDateStr}.</strong>{' '}
+            <span className="text-ink/60">After that, your club drops to Free. Existing data stays — but new members or activities beyond free limits will be paused.</span>
           </p>
         </div>
         <Link href={`/c/${slug}/billing`} className="btn btn-jade whitespace-nowrap">

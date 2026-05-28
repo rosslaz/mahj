@@ -6,8 +6,10 @@ import { runTrialReminderSweep } from '@/lib/trial-reminders';
 //
 //   1. Send trial-ending reminders (7 days out, 1 day out)
 //   2. Downgrade clubs whose trial has fully expired without subscribing
+//   3. Clean up canceled subs whose grace period passed without a webhook
+//      delivery (defense in depth against missed subscription.deleted events)
 //
-// Both run every day. Idempotency in each step prevents duplicate work.
+// All run every day. Idempotency in each step prevents duplicate work.
 //
 // Order matters: reminders first, then expirations. Same-day expiration
 // gets the "your trial ended" sense via the soft-downgrade banner on the
@@ -20,13 +22,16 @@ import { runTrialReminderSweep } from '@/lib/trial-reminders';
 //       AND stripe_subscription_id IS NULL    (they never entered checkout)
 //   - For each: set plan='free', status='free', clear trial_ends_at
 //
+// Canceled cleanup logic:
+//   - Find rows where status='canceled' AND current_period_end < now()
+//   - For each: drop to free, clear all Stripe linkage
+//
 // Clubs that subscribed DURING their trial (stripe_subscription_id is set)
 // don't need any action — Stripe's webhook handles their state transition
 // from trialing→active automatically when the trial ends and the first
 // charge succeeds.
 //
-// Idempotent: re-running the cron is a no-op if all trialing rows are
-// already current.
+// Idempotent: re-running the cron is a no-op if all rows are already current.
 //
 // Authentication mirrors /api/cron/reminders: Vercel cron requests carry
 // Authorization: Bearer <CRON_SECRET>, which Vercel injects automatically.
@@ -61,7 +66,7 @@ export async function GET(request: NextRequest) {
     reminderResult = { found: 0, sent7d: 0, sent1d: 0, errors: 1 };
   }
 
-  // Step 2: find expired trials (trial_ends_at < now and no Stripe sub)
+  // Step 2a: find expired trials (trial_ends_at < now and no Stripe sub)
   const { data: expired, error: fetchErr } = await supabase
     .from('club_subscriptions')
     .select('id, club_id, trial_ends_at')
@@ -74,31 +79,76 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: fetchErr.message }, { status: 500 });
   }
 
-  const expiredList = (expired as any[]) || [];
-  if (expiredList.length === 0) {
-    return NextResponse.json({ ok: true, expired: 0, reminders: reminderResult });
-  }
-
-  // Downgrade each. Could do this as a single UPDATE in one shot, but
-  // looping lets us log/track individual changes for debugging.
-  const expiredIds = expiredList.map((r) => r.id);
-  const { error: updateErr } = await supabase
+  // Step 2b: find canceled subs whose grace period has passed but the
+  // subscription.deleted webhook never fired (or got lost). Defense in depth
+  // against stuck states.
+  const { data: staleCanceled, error: cancelFetchErr } = await supabase
     .from('club_subscriptions')
-    .update({
-      plan: 'free',
-      status: 'free',
-      trial_ends_at: null,
-      updated_at: now,
-    })
-    .in('id', expiredIds);
+    .select('id, club_id, current_period_end')
+    .eq('status', 'canceled')
+    .lt('current_period_end', now);
 
-  if (updateErr) {
-    console.error('[cron/billing-expire] update failed:', updateErr);
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  if (cancelFetchErr) {
+    console.error('[cron/billing-expire] canceled-fetch failed:', cancelFetchErr);
+    // Don't abort the whole cron — trial expirations are independent. Just log.
   }
 
-  console.log(`[cron/billing-expire] downgraded ${expiredIds.length} club(s)`,
-    expiredList.map((r) => r.club_id));
+  const expiredList = (expired as any[]) || [];
+  const staleCanceledList = (staleCanceled as any[]) || [];
+  if (expiredList.length === 0 && staleCanceledList.length === 0) {
+    return NextResponse.json({ ok: true, expired: 0, canceledCleaned: 0, reminders: reminderResult });
+  }
 
-  return NextResponse.json({ ok: true, expired: expiredIds.length, reminders: reminderResult });
+  // Downgrade expired trials: clear trial, drop to free
+  let expiredCount = 0;
+  if (expiredList.length > 0) {
+    const expiredIds = expiredList.map((r) => r.id);
+    const { error: updateErr } = await supabase
+      .from('club_subscriptions')
+      .update({
+        plan: 'free',
+        status: 'free',
+        trial_ends_at: null,
+        updated_at: now,
+      })
+      .in('id', expiredIds);
+    if (updateErr) {
+      console.error('[cron/billing-expire] trial-downgrade failed:', updateErr);
+    } else {
+      expiredCount = expiredIds.length;
+      console.log(`[cron/billing-expire] downgraded ${expiredCount} expired trial(s)`,
+        expiredList.map((r) => r.club_id));
+    }
+  }
+
+  // Clean up canceled subs whose grace period ended without a deletion event
+  let canceledCleanedCount = 0;
+  if (staleCanceledList.length > 0) {
+    const staleIds = staleCanceledList.map((r) => r.id);
+    const { error: cancelErr } = await supabase
+      .from('club_subscriptions')
+      .update({
+        plan: 'free',
+        status: 'free',
+        stripe_subscription_id: null,
+        current_period_end: null,
+        cancel_at_period_end: false,
+        updated_at: now,
+      })
+      .in('id', staleIds);
+    if (cancelErr) {
+      console.error('[cron/billing-expire] canceled-cleanup failed:', cancelErr);
+    } else {
+      canceledCleanedCount = staleIds.length;
+      console.log(`[cron/billing-expire] cleaned ${canceledCleanedCount} stale canceled sub(s)`,
+        staleCanceledList.map((r) => r.club_id));
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    expired: expiredCount,
+    canceledCleaned: canceledCleanedCount,
+    reminders: reminderResult,
+  });
 }
