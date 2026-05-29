@@ -189,14 +189,24 @@ export default function HomePage() {
       if (clubIds.length > 0) {
         // Hosting upcoming events — surface "no approved signups" and
         // "pending approvals" as separate action items.
+        //
+        // Window: only events within the next 30 days. Beyond that, the
+        // host can plan ahead without being nagged. Events further out
+        // are visible on the Activity page if they want to find them.
+        const today30 = new Date();
+        today30.setDate(today30.getDate() + 30);
+        const horizon = today30.toISOString().slice(0, 10);
+
         const { data: hostingEvents } = await supabase
           .from('events')
           .select('id, name, date, club_id, activity:activity_id(slug, is_public)')
           .in('club_id', clubIds)
           .eq('host_player_id', auth.userId!)
           .gte('date', today)
+          .lte('date', horizon)
           .eq('status', 'active')
-          .is('deleted_at', null);
+          .is('deleted_at', null)
+          .order('date', { ascending: true });
         const hostingEventIds = ((hostingEvents as any[]) || []).map((g) => g.id);
         let signupTallies = new Map<string, { approved: number; pending: number }>();
         if (hostingEventIds.length > 0) {
@@ -211,6 +221,14 @@ export default function HomePage() {
             signupTallies.set(r.event_id, t);
           });
         }
+
+        // Collect "no signups" items separately so we can cap them. They're
+        // a soft nudge, not a real task — too many of these is noise.
+        // Pending approvals, by contrast, are real action items so we let
+        // them all through.
+        const HOST_NO_SIGNUPS_CAP = 3;
+        const noSignupItems: ActionItem[] = [];
+
         ((hostingEvents as any[]) || []).forEach((g) => {
           if (!g.activity) return;
           const tally = signupTallies.get(g.id) ?? { approved: 0, pending: 0 };
@@ -225,7 +243,7 @@ export default function HomePage() {
             });
           }
           if (tally.approved === 0) {
-            items.push({
+            noSignupItems.push({
               id: 'host-' + g.id,
               label: `You're hosting "${g.name}" — no signups yet`,
               href,
@@ -233,6 +251,10 @@ export default function HomePage() {
             });
           }
         });
+
+        // hostingEvents was ordered by date ascending, so noSignupItems is
+        // already in chronological order. Take the closest N.
+        noSignupItems.slice(0, HOST_NO_SIGNUPS_CAP).forEach((it) => items.push(it));
 
         // Events in play with pending scores
         const { data: mySignups } = await supabase
