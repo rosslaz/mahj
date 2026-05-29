@@ -146,10 +146,10 @@ export default function NewActivityPage() {
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
       setMembers(list);
-      // Default host to the current user if they're a member
-      if (auth.userId && list.some((m) => m.user_id === auth.userId)) {
-        setHostId(auth.userId);
-      }
+      // Host defaults to none — user picks explicitly. This avoids the
+      // address field auto-filling to the creator's address (often wrong
+      // when an admin creates an activity for someone else, or when the
+      // night isn't at the creator's home).
     })();
   }, [cb.club, supabase, auth.userId]);
 
