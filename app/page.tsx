@@ -370,8 +370,10 @@ export default function HomePage() {
   // -------------------- SIGNED OUT --------------------
   if (!auth.loading && !auth.email) {
     return (
-      <div className="space-y-16">
-        <section className="pt-8 pb-12 grid md:grid-cols-12 gap-8 items-end">
+      <div className="space-y-24 pb-16">
+
+        {/* ─────────── HERO ─────────── */}
+        <section className="pt-8 pb-4 grid md:grid-cols-12 gap-8 items-end">
           <div className="md:col-span-8 fade-up">
             <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-6">Run your club with care</p>
             <h1 className="font-display text-6xl md:text-8xl leading-[0.9] tracking-tight">
@@ -380,24 +382,221 @@ export default function HomePage() {
               <em className="text-jade">Settle the score.</em>
             </h1>
             <p className="mt-8 text-lg text-ink/70 max-w-xl leading-relaxed">
-              Run leagues, host tournaments, teach classes, schedule open play — all in one place.
+              Pungctual is mahjong scheduling, signups, and standings — built for the club that&apos;s tired of counting heads in a group chat.
             </p>
-            <div className="mt-10 flex flex-wrap gap-3">
-              <Link href="/sign-in" className="btn">Get Started</Link>
+            <div className="mt-10 flex flex-wrap gap-3 items-baseline">
+              <Link href="/sign-in" className="btn">Get Started Free</Link>
+              <a href="#pricing" className="text-sm tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar transition-colors">
+                See pricing →
+              </a>
             </div>
+            <p className="mt-4 text-xs text-ink/40 italic">
+              14-day Pro trial on your first club. No card required.
+            </p>
           </div>
           <div className="md:col-span-4 fade-up" style={{ animationDelay: '0.2s' }}>
             <div className="tile-border p-6">
-              <div className="font-display italic text-sm text-ink/50 mb-4">A platform for clubs</div>
+              <div className="font-display italic text-sm text-ink/50 mb-4">Built for mahjong</div>
               <ul className="space-y-3 text-sm">
                 <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Leagues with lifetime standings</span></li>
                 <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Tournaments and classes</span></li>
                 <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Drop-in open play</span></li>
-                <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Owner / admin / member roles</span></li>
+                <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Tables, scores, seating</span></li>
               </ul>
             </div>
           </div>
         </section>
+
+        {/* ─────────── THE PROBLEM ─────────── */}
+        <section className="fade-up">
+          <div className="max-w-3xl mx-auto text-center">
+            <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-4">If this sounds familiar</p>
+            <h2 className="font-display text-4xl md:text-5xl leading-tight mb-8">
+              Tuesday night. <em className="text-jade">Twelve people in a group chat.</em>
+            </h2>
+            <p className="text-lg text-ink/70 leading-relaxed">
+              Someone asks &quot;who&apos;s in tonight?&quot; — the messages scroll past. You count thumbs-ups. You miss someone&apos;s &quot;maybe.&quot; You text the host to confirm. Last week&apos;s scores are buried three weeks back. Standings live in your head.
+            </p>
+            <p className="text-lg text-ink/70 leading-relaxed mt-5">
+              <strong className="text-ink">Pungctual is the boring tool that ends the chasing.</strong> Members sign themselves up. You see who&apos;s coming at a glance. Scores roll into season standings automatically. The group chat goes back to being a group chat.
+            </p>
+          </div>
+        </section>
+
+        {/* ─────────── HOW IT WORKS (3 perspectives) ─────────── */}
+        <section className="fade-up">
+          <div className="text-center mb-12">
+            <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">How it works</p>
+            <h2 className="font-display text-4xl md:text-5xl">Three views. One club.</h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="tile-border p-7">
+              <p className="text-xs tracking-[0.3em] uppercase text-jade mb-3">If you run a club</p>
+              <h3 className="font-display text-2xl mb-3">You see who&apos;s coming.</h3>
+              <p className="text-sm text-ink/70 leading-relaxed">
+                Create the night, share the join code, watch signups roll in. Approve or auto-accept. Set tables, pick the host, broadcast reminders. When the night happens, you focus on the mahjong — not the spreadsheet.
+              </p>
+            </div>
+            <div className="tile-border p-7">
+              <p className="text-xs tracking-[0.3em] uppercase text-jade mb-3">If you play</p>
+              <h3 className="font-display text-2xl mb-3">You sign up in one tap.</h3>
+              <p className="text-sm text-ink/70 leading-relaxed">
+                See what&apos;s on this week. Sign up, withdraw, change your mind. Get reminders before the night. Check your lifetime stats and where you sit in the standings. Discover other clubs near you.
+              </p>
+            </div>
+            <div className="tile-border p-7">
+              <p className="text-xs tracking-[0.3em] uppercase text-jade mb-3">If you organize</p>
+              <h3 className="font-display text-2xl mb-3">You delegate cleanly.</h3>
+              <p className="text-sm text-ink/70 leading-relaxed">
+                Make a co-organizer an admin so they can run things when you can&apos;t. Invite players by email or join code. Send reminders. Run a tournament side-by-side with your weekly league. Everything in one place.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ─────────── SIGNUP MANAGEMENT — THE FEATURE ─────────── */}
+        <section className="fade-up">
+          <div className="grid md:grid-cols-12 gap-10 items-center">
+            <div className="md:col-span-6">
+              <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">Signup management</p>
+              <h2 className="font-display text-4xl md:text-5xl leading-tight mb-6">
+                Everyone sees the same list.
+              </h2>
+              <p className="text-lg text-ink/70 leading-relaxed mb-4">
+                One source of truth for who&apos;s coming. No tallying group chat reactions. No &quot;wait, is Sarah in or out?&quot;
+              </p>
+              <ul className="space-y-3 text-base">
+                <li className="flex gap-3"><span className="text-jade font-display text-xl leading-none mt-0.5">·</span><span><strong>Members sign themselves up</strong> — one tap from the club home.</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display text-xl leading-none mt-0.5">·</span><span><strong>Approve or auto-accept</strong> — your call per club.</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display text-xl leading-none mt-0.5">·</span><span><strong>Outside guests via email</strong> — they join the club + RSVP in one click.</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display text-xl leading-none mt-0.5">·</span><span><strong>Reminders before the night</strong> — push or email.</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display text-xl leading-none mt-0.5">·</span><span><strong>Hidden events</strong> for private tournaments or invitation-only nights.</span></li>
+              </ul>
+            </div>
+            <div className="md:col-span-6">
+              <div className="tile-border p-7 bg-bone">
+                <div className="text-xs tracking-[0.3em] uppercase text-ink/40 mb-3">Tuesday Night · Mar 4</div>
+                <div className="font-display text-2xl mb-5">Week 12 — Sevens Rule</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/50 mb-2">7 of 8 signed up</div>
+                <div className="space-y-1.5 mb-5">
+                  {['Cecilia P.', 'Ross L.', 'Sarah M.', 'Tom K.', 'Linda H.', 'David W.', 'Mei C.'].map((name) => (
+                    <div key={name} className="flex items-center justify-between text-sm border-b border-ink/10 pb-1.5">
+                      <span>{name}</span>
+                      <span className="text-[10px] tracking-[0.2em] uppercase text-jade">Confirmed</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-sm border-b border-ink/10 pb-1.5">
+                    <span className="text-ink/40 italic">— open seat —</span>
+                    <span className="text-[10px] tracking-[0.2em] uppercase text-cinnabar">Open</span>
+                  </div>
+                </div>
+                <div className="text-xs text-ink/50 italic">2 tables · 4 games planned</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─────────── FEATURE GRID ─────────── */}
+        <section className="fade-up" id="features">
+          <div className="text-center mb-10">
+            <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">What&apos;s inside</p>
+            <h2 className="font-display text-4xl md:text-5xl">Built specifically for mahjong.</h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-5">
+            <div className="tile-border p-6">
+              <h3 className="font-display text-xl mb-2">Leagues</h3>
+              <p className="text-sm text-ink/65 leading-relaxed">Recurring nights, season standings, lifetime stats. Wins, points, games played — all tracked.</p>
+            </div>
+            <div className="tile-border p-6">
+              <h3 className="font-display text-xl mb-2">Tournaments</h3>
+              <p className="text-sm text-ink/65 leading-relaxed">One-off events with their own signups and scoring. Side-by-side with your regular league.</p>
+            </div>
+            <div className="tile-border p-6">
+              <h3 className="font-display text-xl mb-2">Classes</h3>
+              <p className="text-sm text-ink/65 leading-relaxed">Teach a beginner series or a workshop. Track attendance, manage seats.</p>
+            </div>
+            <div className="tile-border p-6">
+              <h3 className="font-display text-xl mb-2">Open play</h3>
+              <p className="text-sm text-ink/65 leading-relaxed">Drop-in nights without standings. Just signups and seating.</p>
+            </div>
+            <div className="tile-border p-6">
+              <h3 className="font-display text-xl mb-2">Tables &amp; scoring</h3>
+              <p className="text-sm text-ink/65 leading-relaxed">Assign seats, enter game scores, watch standings update as the night unfolds.</p>
+            </div>
+            <div className="tile-border p-6">
+              <h3 className="font-display text-xl mb-2">Roles &amp; invites</h3>
+              <p className="text-sm text-ink/65 leading-relaxed">Owner, admins, members. Join by code or email invitation. Delegate cleanly.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ─────────── PRICING ─────────── */}
+        <section className="fade-up" id="pricing">
+          <div className="text-center mb-10">
+            <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">Pricing</p>
+            <h2 className="font-display text-4xl md:text-5xl">Simple.</h2>
+            <p className="text-ink/60 mt-3">Start free. Upgrade when you&apos;ve outgrown it.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
+            {/* FREE */}
+            <div className="tile-border p-7 flex flex-col">
+              <div className="text-xs tracking-[0.3em] uppercase text-ink/50 mb-2">Free</div>
+              <div className="font-display text-5xl mb-2">$0</div>
+              <p className="text-sm text-ink/60 italic mb-6">Forever, for small clubs.</p>
+              <ul className="space-y-2.5 text-sm flex-1 mb-6">
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>Up to 5 members per club</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>1 activity (league or open play)</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>1 co-admin beyond the owner</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>Public or private club</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>Push reminders</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>Lifetime stats &amp; standings</span></li>
+              </ul>
+              <Link href="/sign-in" className="btn btn-ghost w-full text-center">Start free</Link>
+            </div>
+
+            {/* PRO */}
+            <div className="tile-border p-7 flex flex-col border-jade/40 bg-jade/[0.03] relative">
+              <div className="absolute top-4 right-4 text-[10px] tracking-[0.2em] uppercase text-jade bg-jade/10 border border-jade/40 px-2 py-0.5">
+                14-day trial
+              </div>
+              <div className="text-xs tracking-[0.3em] uppercase text-jade mb-2">Pro</div>
+              <div className="font-display text-5xl mb-2">$9<span className="text-2xl text-ink/50">/mo</span></div>
+              <p className="text-sm text-ink/60 italic mb-6">Or $90/year — save 17%.</p>
+              <ul className="space-y-2.5 text-sm flex-1 mb-6">
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span><strong>Unlimited members</strong></span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span><strong>Unlimited activities</strong> — leagues, tournaments, classes, open play</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span><strong>Unlimited admins</strong></span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span><strong>Hidden events</strong> — invite-only nights</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span><strong>Email invitations</strong> to people outside the club</span></li>
+                <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span>Everything in Free</span></li>
+              </ul>
+              <Link href="/sign-in" className="btn w-full text-center">Start 14-day trial</Link>
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-ink/40 italic mt-6">
+            Pricing in USD. Subscribe with a card; cancel any time from the billing page.
+          </p>
+        </section>
+
+        {/* ─────────── CLOSING CTA ─────────── */}
+        <section className="fade-up">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="font-display text-5xl md:text-6xl leading-tight">
+              Stop chasing signups.
+              <br />
+              <em className="text-jade">Start your club.</em>
+            </h2>
+            <p className="mt-6 text-ink/70 max-w-xl mx-auto">
+              Create your club in two minutes. Free trial of Pro features for 14 days. No card required.
+            </p>
+            <div className="mt-8">
+              <Link href="/sign-in" className="btn">Get Started</Link>
+            </div>
+          </div>
+        </section>
+
       </div>
     );
   }
