@@ -359,6 +359,9 @@ export default function BillingPage() {
             </button>
           </p>
         )}
+        <p className="text-center text-[10px] text-ink/30 italic">
+          Billing trouble? Email <a href="mailto:support@pungctual.com" className="hover:text-cinnabar underline">support@pungctual.com</a>.
+        </p>
       </div>
     </div>
   );

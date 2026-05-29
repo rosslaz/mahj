@@ -55,6 +55,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center space-y-3">
           <div>Four winds · Three dragons · One Pungctual</div>
           <div className="space-x-4 normal-case tracking-[0.15em] text-[11px]">
+            <a href="mailto:support@pungctual.com" className="hover:text-cinnabar">Contact</a>
+            <span className="text-ink/20">·</span>
             <Link href="/terms" className="hover:text-cinnabar">Terms</Link>
             <span className="text-ink/20">·</span>
             <Link href="/privacy" className="hover:text-cinnabar">Privacy</Link>

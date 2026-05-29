@@ -667,6 +667,9 @@ export default function HomePage() {
             <div className="mt-8">
               <Link href="/sign-in" className="btn">Get Started</Link>
             </div>
+            <p className="mt-10 text-xs text-ink/40 italic">
+              Questions before you sign up? Email <a href="mailto:hello@pungctual.com" className="text-cinnabar hover:underline">hello@pungctual.com</a>.
+            </p>
           </div>
         </section>
 
