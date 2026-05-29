@@ -96,6 +96,9 @@ export default function EventDetailPage() {
   // Transient toast shown briefly after a successful invite send. Lives on
   // the page (not in the modal) so it persists across the modal's unmount.
   const [inviteToast, setInviteToast] = useState<string | null>(null);
+  // Pro state — used to gate the outside-email invite input. Server gate
+  // is still authoritative.
+  const [isPro, setIsPro] = useState<boolean | null>(null);
   // Spinner state for the "Send reminder" button. Toast also reuses inviteToast.
   const [sendingReminder, setSendingReminder] = useState(false);
 
@@ -117,7 +120,7 @@ export default function EventDetailPage() {
     if (!cb.club) return;
     setLoading(true);
 
-    const [nightRes, tablesRes, signupsRes, membersRes, invitesRes] = await Promise.all([
+    const [nightRes, tablesRes, signupsRes, membersRes, invitesRes, subRes] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).eq('club_id', cb.club.id).single(),
       supabase.from('tables').select('*').eq('event_id', id).order('table_number'),
       supabase.from('night_signups').select('id, player_id, status, created_at, invited_at').eq('event_id', id),
@@ -130,7 +133,22 @@ export default function EventDetailPage() {
         .select('id, invitee_user_id, status, created_at, responded_at, invitee:invitee_user_id(name)')
         .eq('event_id', id)
         .order('created_at', { ascending: true }),
+      // Subscription state for gating UI on Pro-only features.
+      supabase.from('club_subscriptions')
+        .select('status, current_period_end')
+        .eq('club_id', cb.club.id)
+        .maybeSingle(),
     ]);
+
+    // Derive Pro flag (mirrors DB club_is_pro logic)
+    const subData = subRes.data as any;
+    const proStatuses = ['active', 'trialing', 'grandfathered', 'past_due'];
+    const pro = subData && (
+      proStatuses.includes(subData.status) ||
+      (subData.status === 'canceled' && subData.current_period_end &&
+       new Date(subData.current_period_end) > new Date())
+    );
+    setIsPro(!!pro);
 
     setNight(nightRes.data as unknown as Night);
     setTables((tablesRes.data as Table[]) || []);
@@ -927,18 +945,35 @@ export default function EventDetailPage() {
               </div>
 
               <div>
-                <label className="label">
+                <label className="label flex items-center gap-2">
                   Outside guests <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                  {isPro === false && (
+                    <span className="text-[9px] tracking-[0.2em] uppercase px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar font-normal">
+                      Pro
+                    </span>
+                  )}
                 </label>
-                <textarea
-                  className="input min-h-[60px] font-mono text-sm"
-                  value={addInviteEmails}
-                  onChange={(e) => setAddInviteEmails(e.target.value)}
-                  placeholder="sarah@example.com&#10;tom@example.com"
-                />
-                <p className="text-xs text-ink/40 italic mt-1">
-                  Email addresses, one per line. They&apos;ll join the club + event in one click.
-                </p>
+                {isPro === false ? (
+                  <div className="border border-ink/10 bg-ink/[0.02] p-3 text-sm text-ink/60">
+                    Email invitations to people outside the club require Pro.{' '}
+                    <Link href={`/c/${cb.club!.slug}/billing`} className="text-cinnabar hover:underline">
+                      Upgrade to Pro
+                    </Link>{' '}
+                    to invite non-members via email.
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      className="input min-h-[60px] font-mono text-sm"
+                      value={addInviteEmails}
+                      onChange={(e) => setAddInviteEmails(e.target.value)}
+                      placeholder="sarah@example.com&#10;tom@example.com"
+                    />
+                    <p className="text-xs text-ink/40 italic mt-1">
+                      Email addresses, one per line. They&apos;ll join the club + event in one click.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { createClubInvites, revokeClubInvite } from '@/app/actions/club-invites';
 
@@ -26,7 +27,12 @@ type Invite = {
  * Lives on the club admin page. Compact when collapsed; expands when the
  * user clicks "Invite people."
  */
-export default function ClubInvitesPanel({ clubId, clubName }: { clubId: string; clubName: string }) {
+export default function ClubInvitesPanel({ clubId, clubName, isPro, slug }: {
+  clubId: string;
+  clubName: string;
+  isPro: boolean | null;
+  slug: string;
+}) {
   const supabase = getBrowserSupabase();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,9 +141,22 @@ export default function ClubInvitesPanel({ clubId, clubName }: { clubId: string;
       <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
         <h2 className="font-display text-3xl">Invitations</h2>
         {!showForm && (
-          <button onClick={() => setShowForm(true)} className="btn btn-jade text-sm">
-            Invite people
-          </button>
+          isPro === false ? (
+            <Link
+              href={`/c/${slug}/billing`}
+              className="text-xs tracking-[0.15em] uppercase text-cinnabar hover:underline inline-flex items-center gap-2"
+              title="Email invitations are a Pro feature."
+            >
+              <span className="px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar text-[9px]">
+                Pro
+              </span>
+              <span>Email invitations require Pro — upgrade</span>
+            </Link>
+          ) : (
+            <button onClick={() => setShowForm(true)} className="btn btn-jade text-sm">
+              Invite people
+            </button>
+          )
         )}
       </div>
 

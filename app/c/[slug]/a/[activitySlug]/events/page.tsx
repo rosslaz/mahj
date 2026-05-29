@@ -61,6 +61,10 @@ export default function ActivityEventsPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<'none' | 'night' | 'series'>('none');
+  // Whether this club has any Pro plan active. Drives the upfront "Hidden
+  // requires Pro" treatment on the visibility picker so users on Free see
+  // the gate before they fill the form. Server-side gate still authoritative.
+  const [isPro, setIsPro] = useState<boolean | null>(null);
 
   // Single-night form state
   const [nightName, setNightName] = useState('');
@@ -148,7 +152,7 @@ export default function ActivityEventsPage() {
   async function load() {
     if (!cb.club || !act.activity) return;
     setLoading(true);
-    const [nightsRes, membersRes, signupsRes] = await Promise.all([
+    const [nightsRes, membersRes, signupsRes, subRes] = await Promise.all([
       supabase.from('events')
         .select('id, name, date, start_time, num_tables, games_planned, status, host:host_player_id(id, name), tables(assigned)')
         .eq('activity_id', act.activity.id)
@@ -163,7 +167,22 @@ export default function ActivityEventsPage() {
         .select('event_id, player_id, status')
         .eq('club_id', cb.club.id)
         .eq('status', 'approved'),
+      // Subscription state for Pro/Free gating UI.
+      supabase.from('club_subscriptions')
+        .select('status, current_period_end')
+        .eq('club_id', cb.club.id)
+        .maybeSingle(),
     ]);
+
+    // Determine Pro: mirrors club_is_pro() in the DB.
+    const subData = subRes.data as any;
+    const proStatuses = ['active', 'trialing', 'grandfathered', 'past_due'];
+    const pro = subData && (
+      proStatuses.includes(subData.status) ||
+      (subData.status === 'canceled' && subData.current_period_end &&
+       new Date(subData.current_period_end) > new Date())
+    );
+    setIsPro(!!pro);
 
     // Build approved-signup count per event
     const approvedByEvent = new Map<string, number>();
@@ -511,15 +530,35 @@ export default function ActivityEventsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setVisibility('hidden')}
-                    className={`p-3 border text-left transition-colors ${
+                    onClick={() => {
+                      if (isPro === false) {
+                        // Redirect to billing rather than letting them fill
+                        // out the hidden-event form they can't submit.
+                        router.push(`/c/${cb.club!.slug}/billing`);
+                        return;
+                      }
+                      setVisibility('hidden');
+                    }}
+                    className={`p-3 border text-left transition-colors relative ${
                       visibility === 'hidden'
                         ? 'border-cinnabar bg-cinnabar/5'
-                        : 'border-ink/15 hover:border-cinnabar/40'
+                        : isPro === false
+                          ? 'border-ink/15 opacity-70 hover:border-cinnabar/40 hover:opacity-100'
+                          : 'border-ink/15 hover:border-cinnabar/40'
                     }`}
                   >
+                    {isPro === false && (
+                      <span className="absolute top-2 right-2 text-[9px] tracking-[0.2em] uppercase px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar">
+                        Pro
+                      </span>
+                    )}
                     <div className="text-sm font-medium">Hidden</div>
                     <div className="text-xs text-ink/50 italic">Invite-only. Hidden from others.</div>
+                    {isPro === false && (
+                      <div className="text-[10px] tracking-[0.15em] uppercase text-cinnabar mt-2">
+                        Upgrade to unlock →
+                      </div>
+                    )}
                   </button>
                 </div>
 

@@ -155,6 +155,11 @@ export default function ClubAdminPage() {
   // the UI hides all the slot messaging.
   const showAdminCap = isPro === false;
   const atAdminCap = showAdminCap && adminCount >= FREE_ADMIN_CAP;
+  // Member cap (Free = 5). Used to warn the owner that the join code won't
+  // work if shared further until they upgrade or someone leaves.
+  const FREE_MEMBER_CAP = 5;
+  const memberCount = members.length;
+  const atMemberCap = isPro === false && memberCount >= FREE_MEMBER_CAP;
 
   return (
     <div className="space-y-12">
@@ -206,10 +211,29 @@ export default function ClubAdminPage() {
           <button onClick={regenerateCode} className="btn btn-ghost text-xs">Regenerate</button>
         </div>
         <p className="text-xs text-ink/50 italic">Share this with new players. They enter it at <code>/clubs/join</code>.</p>
+        {isPro === false && (
+          <div className={`mt-4 pt-4 border-t border-ink/10 text-xs flex items-baseline justify-between flex-wrap gap-2 ${
+            atMemberCap ? 'text-cinnabar' : 'text-ink/50'
+          }`}>
+            <span>
+              {memberCount} of {FREE_MEMBER_CAP} member slots used
+              <span className="text-ink/35 italic ml-1">(Free tier)</span>
+            </span>
+            {atMemberCap ? (
+              <Link href={`/c/${slug}/billing`} className="text-cinnabar hover:underline">
+                Cap reached — upgrade to add more
+              </Link>
+            ) : (
+              <Link href={`/c/${slug}/billing`} className="text-ink/50 hover:text-cinnabar hover:underline">
+                Upgrade for unlimited
+              </Link>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Email invitations */}
-      <ClubInvitesPanel clubId={cb.club.id} clubName={cb.club.name} />
+      <ClubInvitesPanel clubId={cb.club.id} clubName={cb.club.name} isPro={isPro} slug={slug} />
 
       {/* Members management */}
       <section>
