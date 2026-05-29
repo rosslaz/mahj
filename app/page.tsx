@@ -386,6 +386,9 @@ export default function HomePage() {
             </p>
             <div className="mt-10 flex flex-wrap gap-3 items-baseline">
               <Link href="/sign-in" className="btn">Get Started Free</Link>
+              <a href="#teachers" className="text-sm tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar transition-colors">
+                For teachers →
+              </a>
               <a href="#pricing" className="text-sm tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar transition-colors">
                 See pricing →
               </a>
@@ -449,6 +452,76 @@ export default function HomePage() {
               <h3 className="font-display text-2xl mb-3">You delegate cleanly.</h3>
               <p className="text-sm text-ink/70 leading-relaxed">
                 Make a co-organizer an admin so they can run things when you can&apos;t. Invite players by email or join code. Send reminders. Run a tournament side-by-side with your weekly league. Everything in one place.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ─────────── FOR TEACHERS ─────────── */}
+        <section className="fade-up" id="teachers">
+          <div className="grid md:grid-cols-12 gap-10 items-center">
+            <div className="md:col-span-5 md:order-2">
+              <div className="tile-border p-7 bg-bone">
+                <div className="text-xs tracking-[0.3em] uppercase text-ink/40 mb-3">Beginner Class — Spring</div>
+                <div className="font-display text-2xl mb-1">Session 4 of 8</div>
+                <div className="text-xs text-ink/50 mb-5">Tue Mar 18 · 7:00 PM</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/50 mb-2">Roster · 8 students</div>
+                <div className="space-y-1.5">
+                  {[
+                    { name: 'Emma R.', status: 'Confirmed', tone: 'jade' },
+                    { name: 'Marcus T.', status: 'Confirmed', tone: 'jade' },
+                    { name: 'Priya S.', status: 'Confirmed', tone: 'jade' },
+                    { name: 'James W.', status: 'Confirmed', tone: 'jade' },
+                    { name: 'Anna K.', status: 'Can\'t make it', tone: 'cinnabar' },
+                    { name: 'Lin M.', status: 'Confirmed', tone: 'jade' },
+                    { name: 'Owen P.', status: 'No reply', tone: 'ink/40' },
+                    { name: 'Sara D.', status: 'Confirmed', tone: 'jade' },
+                  ].map((s) => (
+                    <div key={s.name} className="flex items-center justify-between text-sm border-b border-ink/10 pb-1.5">
+                      <span>{s.name}</span>
+                      <span className={`text-[10px] tracking-[0.2em] uppercase ${
+                        s.tone === 'jade' ? 'text-jade' : s.tone === 'cinnabar' ? 'text-cinnabar' : 'text-ink/40'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-7 md:order-1">
+              <p className="text-xs tracking-[0.4em] uppercase text-cinnabar mb-3">For teachers</p>
+              <h2 className="font-display text-4xl md:text-5xl leading-tight mb-6">
+                Run your class. <em className="text-jade">Skip the headcount.</em>
+              </h2>
+              <p className="text-lg text-ink/70 leading-relaxed mb-5">
+                You&apos;re here to teach mahjong, not to chase eight people through a group chat asking who&apos;s coming Tuesday. Pungctual gives your students a roster they can sign up to, RSVPs you can actually count, and reminders that go out automatically.
+              </p>
+              <ul className="space-y-3 text-base mb-6">
+                <li className="flex gap-3">
+                  <span className="text-jade font-display text-xl leading-none mt-0.5">·</span>
+                  <span><strong>Schedule your whole series at once</strong> — every Tuesday for 8 weeks, in one click. Each session has its own roster.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-jade font-display text-xl leading-none mt-0.5">·</span>
+                  <span><strong>Students sign themselves up.</strong> They get a join code, they pick which sessions they&apos;re coming to. Beginners figure it out in 30 seconds.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-jade font-display text-xl leading-none mt-0.5">·</span>
+                  <span><strong>Automatic reminders</strong> the night before — so you don&apos;t spend Monday texting eight people.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-jade font-display text-xl leading-none mt-0.5">·</span>
+                  <span><strong>Private cohort</strong> — your spring class doesn&apos;t overlap with your fall class. Each one is its own activity.</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-jade font-display text-xl leading-none mt-0.5">·</span>
+                  <span><strong>One tool, multiple classes</strong> — beginner Tuesday, intermediate Thursday, workshop Saturday, all in one place.</span>
+                </li>
+              </ul>
+              <p className="text-sm text-ink/60 italic leading-relaxed">
+                Pungctual handles the scheduling layer. Keep using whatever you already use to collect class fees — Venmo, cash, whatever works. <span className="text-ink/50">(Built-in payments are on the roadmap.)</span>
               </p>
             </div>
           </div>
