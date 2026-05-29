@@ -14,6 +14,7 @@ import {
 } from '@/lib/use-activity';
 import { slugify } from '@/lib/slug';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
+import { NumberStepper } from '@/components/NumberStepper';
 import { validateZip } from '@/lib/address';
 import { computeSeriesDates } from '@/lib/game-utils';
 import { checkCanCreateActivity, getNewActivityGateState } from '@/app/actions/billing-gates';
@@ -565,11 +566,17 @@ export default function NewActivityPage() {
                   <p className="text-xs text-ink/40 italic mt-1">Leave blank for one event.</p>
                 </div>
                 <div>
-                  <label className="label">Repeat every</label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" className="input w-16 text-center" min={1} max={12} value={intervalWeeks} onChange={(e) => setIntervalWeeks(parseInt(e.target.value || '1', 10))} />
-                    <span className="text-sm text-ink/60">week{intervalWeeks === 1 ? '' : 's'}</span>
-                  </div>
+                  <label className="label">Repeat</label>
+                  <select
+                    className="input"
+                    value={intervalWeeks}
+                    onChange={(e) => setIntervalWeeks(parseInt(e.target.value, 10))}
+                  >
+                    <option value={1}>Every week</option>
+                    <option value={2}>Every other week</option>
+                    <option value={3}>Every 3 weeks</option>
+                    <option value={4}>Every 4 weeks</option>
+                  </select>
                 </div>
               </div>
               {seriesDates.length > 0 && (
@@ -606,12 +613,25 @@ export default function NewActivityPage() {
             <div className="grid md:grid-cols-2 gap-3">
               <div>
                 <label className="label">Tables</label>
-                <input type="number" className="input w-24 text-center" min={1} max={10} value={numTables} onChange={(e) => setNumTables(parseInt(e.target.value || '1', 10))} />
+                <NumberStepper
+                  value={numTables}
+                  onChange={setNumTables}
+                  min={1}
+                  max={10}
+                  label="Number of tables"
+                />
                 <p className="text-xs text-ink/40 italic mt-1">Each holds 4 or 5 players.</p>
               </div>
               <div>
                 <label className="label">Games per event</label>
-                <input type="number" className="input w-24 text-center" min={1} max={20} value={gamesPlanned} onChange={(e) => setGamesPlanned(parseInt(e.target.value || '1', 10))} />
+                <NumberStepper
+                  value={gamesPlanned}
+                  onChange={setGamesPlanned}
+                  min={1}
+                  max={20}
+                  editable
+                  label="Games per event"
+                />
               </div>
             </div>
           )}

@@ -12,6 +12,7 @@ import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
 import { sendEventInvitations } from '@/app/actions/event-invites';
 import { checkCanCreateHiddenEvent } from '@/app/actions/billing-gates';
+import { NumberStepper } from '@/components/NumberStepper';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
 
@@ -477,18 +478,25 @@ export default function ActivityEventsPage() {
             </div>
             <div>
               <label className="label">Number of Tables <span className="text-cinnabar">*</span></label>
-              <input type="number" min={1} max={10} className="input"
+              <NumberStepper
                 value={numTables}
-                onChange={(e) => setNumTables(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-                required />
+                onChange={setNumTables}
+                min={1}
+                max={10}
+                label="Number of tables"
+              />
               <p className="text-xs text-ink/40 italic mt-1">Capacity: {numTables * 4}–{numTables * 5} players.</p>
             </div>
             <div>
               <label className="label">Games per Night <span className="text-cinnabar">*</span></label>
-              <input type="number" min={1} max={20} className="input"
+              <NumberStepper
                 value={gamesPlanned}
-                onChange={(e) => setGamesPlanned(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                required />
+                onChange={setGamesPlanned}
+                min={1}
+                max={20}
+                editable
+                label="Games per night"
+              />
             </div>
             <div className="md:col-span-2">
               <label className="label">Host <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span></label>
@@ -690,18 +698,25 @@ export default function ActivityEventsPage() {
 
               <div>
                 <label className="label">Number of Tables <span className="text-cinnabar">*</span></label>
-                <input type="number" min={1} max={10} className="input"
+                <NumberStepper
                   value={sNumTables}
-                  onChange={(e) => setSNumTables(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-                  required />
+                  onChange={setSNumTables}
+                  min={1}
+                  max={10}
+                  label="Number of tables per night"
+                />
                 <p className="text-xs text-ink/40 italic mt-1">Capacity: {sNumTables * 4}–{sNumTables * 5} players per night.</p>
               </div>
               <div>
                 <label className="label">Games per Night <span className="text-cinnabar">*</span></label>
-                <input type="number" min={1} max={20} className="input"
+                <NumberStepper
                   value={sGamesPlanned}
-                  onChange={(e) => setSGamesPlanned(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                  required />
+                  onChange={setSGamesPlanned}
+                  min={1}
+                  max={20}
+                  editable
+                  label="Games per night"
+                />
               </div>
 
               <div className="md:col-span-2">
