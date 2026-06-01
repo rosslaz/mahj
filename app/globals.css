@@ -29,7 +29,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: rgba(245, 239, 230, 0.85);
+  background: rgba(245, 239, 230, 0.50);
   pointer-events: none;
   z-index: 0;
 }
