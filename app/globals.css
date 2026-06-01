@@ -13,13 +13,14 @@ html, body {
   font-family: var(--font-body);
 }
 
-/* Patterned background: a fixed bone-colored overlay sits on top of
-   the full-opacity pattern so the pattern recedes without going muddy.
+/* Patterned background: an owned watercolor mahjong-tile asset
+   (pungctual-bg.webp, in /public). A fixed bone-colored overlay sits on top
+   of the full-opacity pattern so the pattern recedes without going muddy.
    Adjust the overlay alpha (currently 0.85) to dial the pattern up/down. */
 body {
   position: relative;
   min-height: 100vh;
-  background-image: url('/mahjong-bg.png');
+  background-image: url('/pungctual-bg.webp');
   background-repeat: repeat;
   background-size: 520px auto;
   background-attachment: fixed;
