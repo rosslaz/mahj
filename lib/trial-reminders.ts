@@ -188,7 +188,7 @@ async function sendReminderEmail(
   const htmlBody = `<!DOCTYPE html>
 <html><body style="font-family:Georgia,serif;background:#f5efe6;color:#1a1410;padding:24px;margin:0;">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;padding:36px 32px;border:1px solid rgba(26,20,16,0.1);">
-    <p style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#a8472a;margin:0 0 18px 0;">
+    <p style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#c8412e;margin:0 0 18px 0;">
       ${which === '1d' ? 'Final reminder' : 'Heads up'}
     </p>
     <h1 style="font-size:28px;font-weight:500;margin:0 0 18px 0;color:#1a1410;">
@@ -198,7 +198,7 @@ async function sendReminderEmail(
       ${escapeHtml(intro)}
     </p>
     <p style="margin:0 0 28px 0;">
-      <a href="${billingUrl}" style="display:inline-block;background:#3d6b4f;color:#ffffff;padding:14px 28px;text-decoration:none;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;">
+      <a href="${billingUrl}" style="display:inline-block;background:#0a6e54;color:#ffffff;padding:14px 28px;text-decoration:none;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;">
         Upgrade to Pro
       </a>
     </p>
@@ -213,7 +213,7 @@ async function sendReminderEmail(
       </tr>
       <tr>
         <td style="padding:10px 0;">
-          <strong>Annual</strong> <span style="color:#3d6b4f;font-size:12px;">(save 17%)</span>
+          <strong>Annual</strong> <span style="color:#0a6e54;font-size:12px;">(save 17%)</span>
         </td>
         <td style="padding:10px 0;text-align:right;color:rgba(26,20,16,0.7);">
           $90 / year

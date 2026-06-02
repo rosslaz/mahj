@@ -453,18 +453,18 @@ async function sendInviteEmail(opts: {
 
   const htmlBody = `<!DOCTYPE html>
 <html><body style="font-family:Georgia,serif;background:#f5efe6;color:#1a1410;padding:24px;margin:0;">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;padding:36px 32px;border:1px solid rgba(26,20,16,0.1);">
-    <p style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#a8472a;margin:0 0 18px 0;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;padding:36px 32px;border:1px solid rgba(26,20,16,0.1);">
+    <p style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#c8412e;margin:0 0 18px 0;">
       You're invited
     </p>
-    <h1 style="font-size:28px;font-weight:500;margin:0 0 18px 0;color:#1a1410;">
+    <h1 style="font-size:26px;font-weight:500;margin:0 0 18px 0;color:#1a1410;">
       Join ${escapeHtml(opts.clubName)}
     </h1>
-    <p style="font-size:16px;line-height:1.55;color:rgba(26,20,16,0.85);margin:0 0 18px 0;">
+    <p style="font-size:15px;line-height:1.55;color:rgba(26,20,16,0.85);margin:0 0 18px 0;">
       <strong>${escapeHtml(opts.inviterName)}</strong> has invited you to join their mahjong club on Pungctual.
     </p>
     ${escapedMsg ? `
-    <div style="background:#f5efe6;padding:16px 18px;border-left:3px solid #3d6b4f;margin:18px 0;font-style:italic;color:rgba(26,20,16,0.75);">
+    <div style="background:#f5efe6;padding:16px 18px;border-left:3px solid #0a6e54;margin:18px 0;font-style:italic;color:rgba(26,20,16,0.75);">
       ${escapedMsg}
     </div>
     ` : ''}
@@ -472,7 +472,7 @@ async function sendInviteEmail(opts: {
       Pungctual is a tool for scheduling mahjong nights, tracking games, and keeping clubs organized.
     </p>
     <div style="text-align:center;margin:28px 0;">
-      <a href="${acceptUrl}" style="display:inline-block;background:#3d6b4f;color:#f5efe6;text-decoration:none;padding:14px 28px;font-size:15px;letter-spacing:0.05em;border:1px solid #3d6b4f;">
+      <a href="${acceptUrl}" style="display:inline-block;background:#0a6e54;color:#f5efe6;text-decoration:none;padding:14px 28px;font-size:15px;letter-spacing:0.05em;border:1px solid #0a6e54;">
         Accept Invitation
       </a>
     </div>
