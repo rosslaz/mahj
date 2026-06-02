@@ -3,15 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { notifyClubMemberJoined } from '@/app/actions/notifications';
-import { checkCanAddMember } from '@/app/actions/billing-gates';
+import { joinClubByCodeGated } from '@/app/actions/gated-writes';
 
 export default function JoinClubPage() {
   const router = useRouter();
   const auth = useAuth();
-  const supabase = getBrowserSupabase();
 
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,59 +36,25 @@ export default function JoinClubPage() {
 
     setSubmitting(true);
 
-    // Look up the club by join code via a SECURITY DEFINER RPC. We can't do
-    // a direct `select from clubs where join_code = ?` because the clubs RLS
-    // policy hides private clubs from non-members — possessing the code is
-    // the authorization, but RLS doesn't know that. The RPC bypasses RLS and
-    // returns only minimal fields.
-    const { data: rpcData, error: lookupErr } = await supabase
-      .rpc('lookup_club_by_join_code', { p_code: cleaned });
-
-    if (lookupErr) {
-      setError('Could not look up that code. Try again.');
+    // Single server-action call: looks up the club by code (bypassing the
+    // clubs RLS that hides private clubs from non-members — possession of the
+    // code is the authorization), re-checks the free-tier member cap, and
+    // inserts the membership, all in one round-trip. The DB trigger backstops
+    // the cap if anything bypasses this path.
+    const res = await joinClubByCodeGated(cleaned);
+    if (!res.ok) {
+      setError(res.error);
       setSubmitting(false);
       return;
     }
 
-    // RPC returns a table (array). Take the first row.
-    const clubData = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-
-    if (!clubData) {
-      setError('No club found for that code.');
-      setSubmitting(false);
-      return;
+    // Notify admins of the new member (don't wait — let routing proceed).
+    // Skip if they were already a member (idempotent re-join).
+    if (!res.data!.alreadyMember) {
+      notifyClubMemberJoined(res.data!.clubId, userId).catch(() => {});
     }
 
-    const clubId = (clubData as any).id;
-
-    // Free-tier gate: max 5 members per club.
-    // This is on the JOINER's side — if the club is full, the new person
-    // can't join. The owner needs to upgrade or remove someone.
-    const gate = await checkCanAddMember(clubId);
-    if (!gate.ok) {
-      setError(gate.error + ' Ask the club owner to upgrade to Pro.');
-      setSubmitting(false);
-      return;
-    }
-
-    const { error: memErr } = await supabase.from('club_members').insert({
-      club_id: clubId,
-      user_id: userId,
-      role: 'member',
-    });
-
-    if (memErr && memErr.code !== '23505') {
-      setError(memErr.message);
-      setSubmitting(false);
-      return;
-    }
-
-    // Notify admins of the new member (don't wait — let routing proceed)
-    if (!memErr) {
-      notifyClubMemberJoined(clubId, userId).catch(() => {});
-    }
-
-    router.push(`/c/${(clubData as any).slug}`);
+    router.push(`/c/${res.data!.clubSlug}`);
   }
 
   return (

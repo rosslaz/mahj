@@ -55,10 +55,86 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
   const serviceClient = getServiceSupabase();
 
   // ------------------------------------------------------------
+  // Step 0: Transfer (or retire) clubs this user OWNS.
+  //
+  // clubs.owner_user_id is `on delete restrict` and we only soft-delete the
+  // users row, so nothing forces this — but a club whose owner is an
+  // anonymized stub is headless: the owner-only billing routes (checkout /
+  // portal / sync) can never be invoked again, and it reopens the per-user
+  // trial exploit (the old club's ownership points at the dead users row, so
+  // a fresh sign-up under the same email owns zero clubs and gets a new
+  // trial). So we hand each owned club off to its senior-most admin, or
+  // soft-delete it if there's nobody to take it.
+  //
+  // This MUST run before Step 1 (event reassignment) so that events the
+  // deleting user hosts in their own club get reassigned to the NEW owner,
+  // and before Step 2 (membership delete) so the senior-admin lookup can
+  // still see the club's members.
+  //
+  // The whole transfer is done in one RPC per club so the owner swap +
+  // membership role changes are atomic — a half-applied transfer (new
+  // owner_user_id but old owner still role='owner') would violate the
+  // app's "exactly one owner" assumption.
+  // ------------------------------------------------------------
+  const { data: ownedClubs } = await serviceClient
+    .from('clubs')
+    .select('id, name, slug')
+    .eq('owner_user_id', userId)
+    .is('deleted_at', null);
+
+  // New owners we transferred to — used to notify them via the same
+  // host-reassignment channel isn't right (different event), so we just
+  // log. A dedicated "you now own X" notification can come later.
+  const transferredClubIds: string[] = [];
+  const retiredClubIds: string[] = [];
+
+  if (ownedClubs && ownedClubs.length > 0) {
+    for (const club of ownedClubs as any[]) {
+      // transfer_club_ownership_on_delete:
+      //   - finds the senior-most admin (role='admin', earliest joined_at)
+      //   - if found: sets clubs.owner_user_id to them, promotes them to
+      //     'owner', demotes the leaving owner to 'member' (they're about to
+      //     be removed from club_members anyway in Step 2, but we keep the
+      //     row consistent in the interim), and returns the new owner's id
+      //   - if no admin exists: soft-deletes the club (deleted_at = now())
+      //     and returns null
+      const { data: newOwnerId, error: transferErr } = await serviceClient.rpc(
+        'transfer_club_ownership_on_delete',
+        { p_club_id: club.id, p_leaving_user_id: userId }
+      );
+      if (transferErr) {
+        // Don't abort the whole deletion on one club's transfer failure —
+        // log it for manual cleanup. The user still gets deleted; worst case
+        // a club is left headless and support fixes it. (Rare: only on a DB
+        // error, not on the no-admin path which the RPC handles internally.)
+        console.error(`[deleteMyAccount] club transfer failed for ${club.id}:`, transferErr);
+        continue;
+      }
+      if (newOwnerId) {
+        transferredClubIds.push(club.id);
+      } else {
+        retiredClubIds.push(club.id);
+      }
+    }
+    if (transferredClubIds.length > 0) {
+      console.log('[deleteMyAccount] transferred clubs to senior admins:', transferredClubIds);
+    }
+    if (retiredClubIds.length > 0) {
+      console.log('[deleteMyAccount] soft-deleted ownerless clubs:', retiredClubIds);
+    }
+  }
+
+  // ------------------------------------------------------------
   // Step 1: Reassign hosted events
   //
   // For each event hosted by this user, find the club owner and reassign.
   // Then dispatch a notification to the new host.
+  //
+  // Note: for clubs the user just transferred (Step 0), the owner lookup
+  // below now resolves to the NEW owner, so their hosted events follow
+  // ownership. For clubs that were soft-deleted in Step 0, the events go
+  // along with the club (soft-deleted clubs are filtered out of the UI),
+  // but we still null the host here for tidiness.
   // ------------------------------------------------------------
   const { data: hostedEvents } = await serviceClient
     .from('events')
@@ -95,8 +171,10 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
           .in('id', eventIds);
         continue;
       }
-      // If the owner IS the deleting user (e.g. owner-host deleting their
-      // own events in their own club), set to null. They're going away.
+      // If the owner IS the deleting user, the club was soft-deleted in
+      // Step 0 (no admin to transfer to) — owner_user_id still points at the
+      // leaving user. Null the host; the event rides along with the retired
+      // club either way.
       if (ownerId === userId) {
         await serviceClient
           .from('events')

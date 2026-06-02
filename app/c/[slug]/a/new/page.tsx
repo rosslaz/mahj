@@ -17,7 +17,8 @@ import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { NumberStepper } from '@/components/NumberStepper';
 import { validateZip } from '@/lib/address';
 import { computeSeriesDates } from '@/lib/game-utils';
-import { checkCanCreateActivity, getNewActivityGateState } from '@/app/actions/billing-gates';
+import { getNewActivityGateState } from '@/app/actions/billing-gates';
+import { createActivityGated } from '@/app/actions/gated-writes';
 
 const ACTIVITY_TYPES: ActivityType[] = ['league', 'tournament', 'class', 'open_play'];
 
@@ -198,30 +199,24 @@ export default function NewActivityPage() {
     if (!activityName.trim()) { setError('Activity name is required.'); return; }
     setSubmitting(true);
     try {
-      // Free-tier gate: max 1 activity, must be league or open_play.
-      // We check on the server because the answer depends on club-wide
-      // subscription state, not just the form.
-      const gate = await checkCanCreateActivity(cb.club!.id, type);
-      if (!gate.ok) {
-        setError(gate.error);
+      // Pick a unique slug client-side (read-only probe), then create via a
+      // gated server action that re-checks the free-tier limit AND inserts in
+      // one call. The DB trigger backstops it if the check is bypassed.
+      const aSlug = await pickActivitySlug(slugify(activityName.trim()));
+      const res = await createActivityGated({
+        clubId: cb.club!.id,
+        slug: aSlug,
+        name: activityName.trim(),
+        description: activityDescription.trim() || null,
+        type,
+        isPublic,
+      });
+      if (!res.ok) {
+        setError(res.error);
         setSubmitting(false);
         return;
       }
-      const aSlug = await pickActivitySlug(slugify(activityName.trim()));
-      const { data: actData, error: actErr } = await supabase
-        .from('activities')
-        .insert({
-          club_id: cb.club!.id,
-          slug: aSlug,
-          name: activityName.trim(),
-          description: activityDescription.trim() || null,
-          type,
-          is_public: isPublic,
-        })
-        .select()
-        .single();
-      if (actErr || !actData) throw new Error(actErr?.message || 'Could not create activity.');
-      router.push(`/c/${clubSlug}/a/${aSlug}`);
+      router.push(`/c/${clubSlug}/a/${res.data!.slug}`);
     } catch (e: any) {
       setError(e.message);
       setSubmitting(false);
@@ -258,29 +253,25 @@ export default function NewActivityPage() {
 
     setSubmitting(true);
     try {
-      // Free-tier gate: same check as createActivityOnly.
-      const gate = await checkCanCreateActivity(cb.club!.id, type);
-      if (!gate.ok) {
-        setError(gate.error);
+      // Create the activity via the gated server action (re-checks the
+      // free-tier limit + inserts atomically; DB trigger backstops). The
+      // events + tables below stay client-side — they're not billing-gated
+      // beyond the hidden-event trigger, which fires on the events insert.
+      const aSlug = await pickActivitySlug(slugify(activityName.trim()));
+      const actRes = await createActivityGated({
+        clubId: cb.club!.id,
+        slug: aSlug,
+        name: activityName.trim(),
+        description: activityDescription.trim() || null,
+        type,
+        isPublic,
+      });
+      if (!actRes.ok) {
+        setError(actRes.error);
         setSubmitting(false);
         return;
       }
-      // Create the activity first
-      const aSlug = await pickActivitySlug(slugify(activityName.trim()));
-      const { data: actData, error: actErr } = await supabase
-        .from('activities')
-        .insert({
-          club_id: cb.club!.id,
-          slug: aSlug,
-          name: activityName.trim(),
-          description: activityDescription.trim() || null,
-          type,
-          is_public: isPublic,
-        })
-        .select()
-        .single();
-      if (actErr || !actData) throw new Error(actErr?.message || 'Could not create activity.');
-      const activityId = (actData as any).id;
+      const activityId = actRes.data!.id;
 
       // Build event rows (single or series)
       const padWidth = String(dates.length).length;
