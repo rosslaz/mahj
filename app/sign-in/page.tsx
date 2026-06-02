@@ -5,28 +5,34 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 
-// Two flows, decided at runtime based on whether the user is running the
-// app from a home-screen-installed PWA:
+// One primary flow for everyone: enter the 6-digit code from the email.
 //
-//   PWA user (display-mode: standalone)
-//     → defaults to OTP code entry. Magic links from email open in the
-//       default browser, NOT the PWA. The user could click the link in
-//       Mail and end up signed in to Safari while their PWA stays signed
-//       out. The code path keeps auth inside the PWA where they wanted it.
+// Why code-first regardless of context:
+//   The magic link only works when clicked in the SAME browser context that
+//   requested it. In practice that breaks constantly — a user requests on
+//   desktop, the email opens the link in their phone's mail app or an in-app
+//   browser, and the session lands somewhere they didn't want it. The code
+//   is portable: it works no matter where the email is opened. PWA users had
+//   this problem worst (links open outside the installed app), but browser
+//   users hit it too.
 //
-//   Browser user
-//     → defaults to magic-link flow. Faster to click than to type. The
-//       code is still offered as a fallback via a small link.
+// The magic link is NOT removed — the same signInWithOtp email still carries
+// both a link and a code (the template includes {{ .Token }} and the
+// confirmation URL). We just present the code as the primary path and demote
+// the link to a quiet fallback. Browser users who prefer one tap can still
+// use it; PWA users are warned it opens outside the app.
 //
-// Both flows hit the same Supabase signInWithOtp call — that endpoint emits
-// an email containing BOTH a magic link and a code. We just present them
-// differently. Same email arrives either way.
+// isPwa is still detected, but now only to tune the fallback copy (whether
+// the link is "open in this browser" vs "will open outside the app"), not to
+// pick an entirely different layout.
 
 type Phase = 'email' | 'sent';
 
-// A typed code is "plausible" if it's exactly 6 or 8 digits after stripping
-// spaces/dashes — the two lengths Supabase uses by default depending on
-// project config.
+// A typed code is "plausible" if it's 6 digits (the configured length) after
+// stripping spaces/dashes. We also still accept 8 digits during the cutover
+// window from the old 8-digit config — codes already in inboxes stay valid
+// for ~1 hour after the dashboard length change. Once you're confident no
+// 8-digit codes remain in flight, drop the 8-digit branch.
 function isPlausibleCode(raw: string): boolean {
   const cleaned = raw.replace(/\s|-/g, '');
   return /^\d{6}$/.test(cleaned) || /^\d{8}$/.test(cleaned);
@@ -96,23 +102,16 @@ export default function SignInPage() {
     }
   }, []);
 
-  // In browser mode, the code form is hidden behind a "Link not working?"
-  // toggle. In PWA mode, the code form is the primary UI — this toggle
-  // is unused (kept for symmetry).
-  const [showCodeFormInBrowser, setShowCodeFormInBrowser] = useState(false);
-
-  // In browser mode, also offer a quiet "or use the link" affordance when
-  // the user is on the code form. In PWA mode the link won't work anyway.
+  // Toggle that reveals the magic-link fallback explanation under the code
+  // form. (Named historically for the PWA case; now used for everyone.)
   const [showLinkInfoInPwa, setShowLinkInfoInPwa] = useState(false);
 
-  // Auto-focus the code input when it becomes visible
+  // Auto-focus the code input when we land on the 'sent' screen — the code
+  // form is now the primary UI for everyone, so it's always present here.
   useEffect(() => {
     if (phase !== 'sent') return;
-    // PWA: code input is always there once we're on the sent screen
-    // Browser: code input appears when toggled
-    const codeIsVisible = isPwa === true || showCodeFormInBrowser;
-    if (codeIsVisible) codeInputRef.current?.focus();
-  }, [phase, isPwa, showCodeFormInBrowser]);
+    codeInputRef.current?.focus();
+  }, [phase]);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
@@ -177,7 +176,6 @@ export default function SignInPage() {
 
   function resetToEmailEntry() {
     setPhase('email');
-    setShowCodeFormInBrowser(false);
     setShowLinkInfoInPwa(false);
     setCode('');
     setError(null);
@@ -199,9 +197,7 @@ export default function SignInPage() {
           {mode === 'sign_in' ? 'Sign In' : 'Create Account'}
         </h1>
         <p className="mt-3 text-ink/60 italic font-display">
-          {mode === 'sign_in'
-            ? (isPwa ? 'A code will arrive in your inbox.' : 'A link will arrive in your inbox.')
-            : (isPwa ? 'A code will arrive in your inbox.' : 'A link will arrive in your inbox.')}
+          A code will arrive in your inbox.
         </p>
       </header>
 
@@ -361,16 +357,17 @@ export default function SignInPage() {
         </div>
       )}
 
-      {phase === 'sent' && isPwa === true && (
+      {phase === 'sent' && isPwa !== null && (
         // ============================================================
-        // PWA MODE: code entry is the primary UI
+        // CODE-FIRST for everyone. The 6-digit code is the primary path;
+        // the magic link is a demoted fallback below.
         // ============================================================
         <div className="space-y-5">
           <form onSubmit={verifyCode} className="tile-border p-7 space-y-5">
             <div>
               <h2 className="font-display text-2xl mb-1">Enter your code</h2>
               <p className="text-sm text-ink/60">
-                We sent a code to <strong>{email}</strong>. Type it below to sign in.
+                We sent a 6-digit code to <strong>{email}</strong>. Type it below to sign in.
               </p>
             </div>
             <div>
@@ -384,7 +381,7 @@ export default function SignInPage() {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={10}
-                placeholder="12345678"
+                placeholder="123456"
                 required
               />
             </div>
@@ -401,10 +398,9 @@ export default function SignInPage() {
             </p>
           </form>
 
-          {/* Quiet escape hatch for PWA users who prefer the link. Rarely
-              useful here since the link opens outside the PWA, but kept
-              for the unusual cases (desktop PWAs where browser/PWA share
-              cookies, troubleshooting, etc). */}
+          {/* Demoted fallback: the same email also has a magic link. Browser
+              users can use it (one tap, same browser). PWA users are warned
+              it opens outside the installed app. */}
           {!showLinkInfoInPwa ? (
             <div className="text-center">
               <button
@@ -412,103 +408,31 @@ export default function SignInPage() {
                 onClick={() => setShowLinkInfoInPwa(true)}
                 className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
               >
-                Use the link instead?
+                Prefer the link?
               </button>
             </div>
           ) : (
             <div className="tile-border p-5 text-sm text-ink/70 space-y-2">
-              <p>
-                Your email also includes a magic link. Clicking it on this device may open the link in your default browser rather than this app — which would sign you in there, not here.
-              </p>
-              <p className="text-xs text-ink/40 italic">
-                Typing the code keeps you signed in within Pungctual.
-              </p>
+              {isPwa ? (
+                <>
+                  <p>
+                    Your email also includes a magic link. On this device it may open in your default browser rather than this app — signing you in there instead of here.
+                  </p>
+                  <p className="text-xs text-ink/40 italic">
+                    Typing the code keeps you signed in within Pungctual.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Your email also includes a magic link. Click it <strong>in this same browser</strong> and you'll be signed in — no code needed.
+                  </p>
+                  <p className="text-xs text-ink/40 italic">
+                    Same email either way. Use whichever is easiest.
+                  </p>
+                </>
+              )}
             </div>
-          )}
-
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={resetToEmailEntry}
-              className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
-            >
-              ← Use a different email
-            </button>
-          </div>
-        </div>
-      )}
-
-      {phase === 'sent' && isPwa === false && (
-        // ============================================================
-        // BROWSER MODE: magic-link is the primary UI; code is fallback
-        // ============================================================
-        <div className="space-y-5">
-          <div className="tile-border p-7 space-y-3">
-            <h2 className="font-display text-2xl">Check your email</h2>
-            <p className="text-sm text-ink/70">
-              We sent a sign-in email to <strong>{email}</strong>.
-            </p>
-            <p className="text-sm text-ink/70">
-              Click the magic link in the email <strong>on this same browser</strong>, and you'll be signed in.
-            </p>
-            <p className="text-xs text-ink/40 italic">
-              If it doesn't appear in a minute, check spam.
-            </p>
-          </div>
-
-          {!showCodeFormInBrowser ? (
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => setShowCodeFormInBrowser(true)}
-                className="text-xs tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar"
-              >
-                Link not working? Enter code instead →
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={verifyCode} className="tile-border p-7 space-y-5">
-              <div>
-                <h3 className="font-display text-xl mb-1">Enter code</h3>
-                <p className="text-xs text-ink/50 italic">
-                  Your email also contains a one-time code. Type it below to sign in here.
-                </p>
-              </div>
-              <div>
-                <label className="label">Code from email</label>
-                <input
-                  ref={codeInputRef}
-                  type="text"
-                  className="input text-center text-2xl tracking-[0.4em] font-mono"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={10}
-                  placeholder="12345678"
-                  required
-                />
-              </div>
-              {verifyError && <p className="text-cinnabar text-sm">{verifyError}</p>}
-              <div className="flex items-center gap-3">
-                <button
-                  className="btn btn-jade flex-1 justify-center"
-                  disabled={verifying || !isPlausibleCode(code)}
-                >
-                  {verifying ? 'Verifying…' : 'Verify & Sign In'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowCodeFormInBrowser(false); setCode(''); setVerifyError(null); }}
-                  className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
-                >
-                  Cancel
-                </button>
-              </div>
-              <p className="text-xs text-ink/40 italic">
-                Same email, same code — use whichever way is easiest. The code expires after about an hour.
-              </p>
-            </form>
           )}
 
           <div className="text-center">
