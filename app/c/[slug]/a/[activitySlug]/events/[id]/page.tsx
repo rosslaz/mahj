@@ -1496,7 +1496,7 @@ function ScoreEntryModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 fade-up">
-      <div className="bg-bone tile-border w-full max-w-lg p-7 max-h-[90vh] overflow-y-auto">
+      <div className="bg-bone tile-border w-full max-w-lg pt-7 px-7 pb-0 max-h-[90vh] overflow-y-auto">
         <div className="flex items-baseline justify-between mb-2">
           <h3 className="font-display text-3xl">Game Result</h3>
           <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
@@ -1508,7 +1508,11 @@ function ScoreEntryModal({
           </p>
         )}
 
-        <p className="text-sm text-ink/50 italic mb-6">How did this hand end?</p>
+        <p className="text-sm text-ink/50 italic mb-2">How did this hand end?</p>
+        {hasExistingCompleted && (
+          <p className="text-xs text-jade mb-6 not-italic">Editing a saved result — changes overwrite what's recorded.</p>
+        )}
+        {!hasExistingCompleted && <div className="mb-6" />}
 
         {/* Outcome selector */}
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -1590,13 +1594,15 @@ function ScoreEntryModal({
 
         {error && <p className="text-cinnabar text-sm mb-3">{error}</p>}
 
-        <div className="flex flex-wrap gap-3">
+        {/* Sticky action bar — stays reachable without scrolling on a phone,
+            since this is the highest-frequency live-night action. */}
+        <div className="sticky bottom-0 -mx-7 px-7 py-4 bg-bone border-t border-ink/10 flex flex-wrap gap-3">
           <button onClick={save} className="btn btn-jade flex-1 justify-center" disabled={saving || outcome === null}>
             {saving ? 'Saving…' : 'Save Result'}
           </button>
           <button onClick={onClose} className="btn btn-ghost">Cancel</button>
           {hasExistingCompleted && (
-            <button onClick={clearAndClose} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar ml-auto">
+            <button onClick={clearAndClose} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar ml-auto self-center">
               Clear
             </button>
           )}
