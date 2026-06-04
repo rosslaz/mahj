@@ -1235,7 +1235,18 @@ function TableSection({
     });
     return { seat: s, member, pts, wins };
   });
-  playerTotals.sort((a, b) => b.wins - a.wins || b.pts - a.pts);
+  // Order seats by their physical table position rather than by score, so the
+  // 2×2 grid mirrors where people actually sit:
+  //   top row:    North  East
+  //   bottom row: West   South
+  // In a 2-col grid (filled left→right, top→bottom) that's [N, E, W, S].
+  // A 5-player table's sit-out seat has wind=null; it trails as the 5th cell.
+  const WIND_LAYOUT_ORDER: (Wind | null)[] = ['N', 'E', 'W', 'S', null];
+  playerTotals.sort((a, b) => {
+    const ai = WIND_LAYOUT_ORDER.indexOf(a.seat.wind);
+    const bi = WIND_LAYOUT_ORDER.indexOf(b.seat.wind);
+    return ai - bi;
+  });
 
   return (
     <section className="tile-border p-6 md:p-8">
@@ -1244,7 +1255,7 @@ function TableSection({
         <span className="text-xs tracking-[0.2em] uppercase text-ink/40">{seats.length} seated</span>
       </div>
 
-      <div className={`grid grid-cols-2 ${seats.length === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-3 mb-7`}>
+      <div className="grid grid-cols-2 gap-3 mb-7">
         {playerTotals.map((p) => (
           <div key={p.seat.id} className="border border-ink/10 bg-bone/50 p-3 text-center relative group">
             <div className="text-[10px] tracking-[0.2em] uppercase text-cinnabar mb-1">
