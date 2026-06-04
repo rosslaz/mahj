@@ -1195,6 +1195,7 @@ function EventDetailPageInner() {
       {activeGame && (
         <ScoreEntryModal
           gameId={activeGame.gameId}
+          clubId={cb.club!.id}
           tableSeats={seats.filter((s) => s.table_id === activeGame.tableId)}
           gpws={gpws[activeGame.gameId] || []}
           members={members}
@@ -1395,9 +1396,9 @@ function SwapPlayerModal({
 
 // ============================================================
 function ScoreEntryModal({
-  gameId, tableSeats, gpws, members, existingScores, confirm, toast, onClose, onSaved,
+  gameId, clubId, tableSeats, gpws, members, existingScores, confirm, toast, onClose, onSaved,
 }: {
-  gameId: string; tableSeats: Seat[]; gpws: GPW[]; members: Member[];
+  gameId: string; clubId: string; tableSeats: Seat[]; gpws: GPW[]; members: Member[];
   existingScores: Score[];
   confirm: (opts: ConfirmOptions) => Promise<boolean>;
   toast: (message: string, variant?: 'success' | 'error' | 'info') => void;
@@ -1448,23 +1449,16 @@ function ScoreEntryModal({
 
     setSaving(true);
     try {
-      // Resolve league_id for inserts
-      let leagueId: string | undefined;
-      if (existingScores.length > 0) leagueId = (existingScores[0] as any).league_id;
-      if (!leagueId) {
-        const { data: g } = await supabase.from('games').select('league_id').eq('id', gameId).single();
-        leagueId = (g as any)?.league_id;
-      }
-      if (!leagueId) throw new Error('Could not resolve league for this game');
-
-      // Wipe existing scores for this game and re-insert under the new model
+      // Wipe existing scores for this game and re-insert under the current model.
+      // Scores are keyed by club_id (the 0010 rebuild renamed league_id → club_id);
+      // club_id is passed in from the parent rather than re-resolved here.
       await supabase.from('game_scores').delete().eq('game_id', gameId);
 
       const payload = playingPlayers.map(({ seat }) => {
         const isWinner = outcome === 'winner' && seat.player_id === winnerId;
         const points = isWinner ? parseInt(pointsStr, 10) : 0;
         return {
-          league_id: leagueId,
+          club_id: clubId,
           game_id: gameId,
           player_id: seat.player_id,
           points,

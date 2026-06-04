@@ -32,9 +32,12 @@ export const ACTIVITY_TYPE_DESCRIPTION: Record<ActivityType, string> = {
 };
 
 // Whether an activity type uses the structured mahjong machinery
-// (tables, winds, scoring, leaderboard). Classes and open play don't.
+// (tables, winds, scoring). League, tournament, and open play do; classes
+// are attendance-only. Note: "has scoring" is distinct from "feeds league
+// standings" — open-play games are scored and count toward a player's lifetime
+// stats, but the per-activity `leaderboard` view stays league/tournament-only.
 export function activityHasScoring(type: ActivityType): boolean {
-  return type === 'league' || type === 'tournament';
+  return type === 'league' || type === 'tournament' || type === 'open_play';
 }
 
 export type ActivityContextState = {

@@ -2,7 +2,7 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0027. This file is the source
+-- reflecting the end state of migrations 0002–0028. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
@@ -927,7 +927,7 @@ create policy event_invites_update on public.event_invites for update to public 
 
 -- night_signups
 create policy night_signups_select on public.night_signups for select to public using ((is_club_member(club_id, 'member'::text) or (player_id = current_user_id())));
-create policy night_signups_insert on public.night_signups for insert to public with check (((player_id = current_user_id()) and ((is_club_member(club_id, 'member'::text) and (status = 'approved'::text)) or (is_public_event(event_id) and (status = 'pending'::text)))));
+create policy night_signups_insert on public.night_signups for insert to public with check ((((player_id = current_user_id()) and ((is_club_member(club_id, 'member'::text) and (status = 'approved'::text)) or (is_public_event(event_id) and (status = 'pending'::text)))) or is_club_member(club_id, 'admin'::text) or (exists ( select 1 from events e where ((e.id = night_signups.event_id) and (e.host_player_id = current_user_id()))))));
 create policy night_signups_update on public.night_signups for update to public using (((exists ( select 1 from events e where ((e.id = night_signups.event_id) and (e.host_player_id = current_user_id())))) or is_club_member(club_id, 'admin'::text)));
 create policy night_signups_delete on public.night_signups for delete to public using (((player_id = current_user_id()) or (exists ( select 1 from events e where ((e.id = night_signups.event_id) and (e.host_player_id = current_user_id())))) or is_club_member(club_id, 'admin'::text)));
 

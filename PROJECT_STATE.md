@@ -37,8 +37,14 @@ standings. Tagline: "Stack the tiles. Settle the score."
 ### Environment
 
 - Windows + VSCode + **PowerShell** (commands should be PowerShell-flavored)
-- Deploy flow: `npm run build` → `git add/commit/push` → Vercel auto-deploys
-- Version lives in `package.json`; footer displays it; bump on each shippable change
+- Deploy flow: **bump version FIRST** (`npm version patch|minor|major`) →
+  `npm run build` → `git add/commit/push` → Vercel auto-deploys. `npm version`
+  bumps `package.json` AND tags the commit in one command — do it first so the
+  version can't be forgotten. patch = fix/polish · minor = new user-facing
+  capability · major = breaking change.
+- Version lives in `package.json` (the single source of truth — don't duplicate
+  the number elsewhere); footer displays it; feeds the service-worker stamp
+  (`scripts/stamp-sw-version.mjs`) so installed PWAs detect updates.
 
 ---
 
@@ -72,15 +78,29 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 → `tables` → `games` → `game_scores`. Identity is `users` (one per human, linked to
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
-- Full consolidated schema: `schema.sql` (reflects baseline + migrations 0011–0025).
+- Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
+  baseline + migrations through **0028**). Regenerate it (don't hand-edit) after
+  applying new migrations, and bump the migration number on this line to match the
+  highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →
   renamed to clubs/activities/events in 0010). The baseline `schema.sql` already
   represents their end state.
+- Security migrations to know about: **0026** (account-deletion club-ownership
+  transfer + DB-level free-tier gate triggers) and **0027** (the leaderboard leak fix
+  above + locking down `transfer_club_ownership_on_delete` and the `enforce_free_tier_*`
+  trigger fns to service_role only). **Supabase footgun:** new functions in `public`
+  are auto-granted EXECUTE to `anon`/`authenticated` via default privileges, and
+  `revoke ... from public` does NOT undo that — you must `revoke ... from anon,
+  authenticated` explicitly (0027 does this). Re-check after adding any SECURITY
+  DEFINER function that shouldn't be client-callable.
 - Key RLS helpers (SECURITY DEFINER): `current_user_id()`, `is_club_member(club_id,
   role)`, `is_public_event(event_id)`, `can_manage_event(event_id)` (breaks an
   events↔event_invites RLS recursion), `club_is_pro(club_id)`, plus billing counters.
 - `leaderboard` view is per-activity (league/tournament only). `public_events` view
-  is discovery-safe (no street) and anon-readable.
+  is discovery-safe (no street) and anon-readable. **Both are `security_invoker=true`**
+  — `leaderboard` defaulted to security-DEFINER originally, which leaked every club's
+  standings + player names to anon (fixed in migration 0027). If you ever recreate
+  either view, keep `with (security_invoker = true)` or the cross-tenant leak returns.
 - **Two-identity gotcha:** an auth session and a `users` row are separate. If a
   session exists but no `users` row, `current_user_id()` returns NULL and the user
   is in a "logged in but everything says sign in" dead state. `useAuth` now
@@ -137,7 +157,15 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Conventions
 
-- **Version bump** in `package.json` on each shippable change; footer reflects it.
+- **Version bump** in `package.json` on each shippable change — via
+  `npm version patch|minor|major` as the FIRST step of the deploy ritual (see
+  Stack → Environment → Deploy flow). Bumps package.json + tags the commit in one
+  go so the version can't drift from what shipped. Footer reflects it; SW stamp
+  uses it.
+- **Migration ritual:** after applying a new migration to the DB, (1) regenerate
+  `schema.sql` from the live DB (don't hand-edit), and (2) bump the "through NNNN"
+  number on the schema line in **Data model** to match the highest applied
+  migration. Do both at apply-time so the doc never drifts behind the DB.
 - **File creation strategy when working without container access:** deliver edited
   files (or a project-structure zip) for the user to apply. When unzipping a single
   file, prefer pasting contents directly — a misplaced zip caused an `app/lib/`
@@ -157,10 +185,15 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Known gotchas
 
-- **Container resets between sessions.** The working folder does NOT persist. To get
-  full edit/build capability, upload a source zip (minus node_modules/.next/.git/
-  .env*) to the chat at session start. Project-knowledge files are read-only
-  reference, not a working tree.
+- **Filesystem access varies by session.** When a Filesystem connector is available,
+  Claude edits files directly on the local machine (primary path — read/edit/write
+  in place; verify writes by reading back). Caveat: the connector can time out on
+  large files or big multi-edit batches — if it stalls, restart it (Settings →
+  Connectors) or fall back to the zip path. **Fallback when no connector / it's
+  flaky:** upload a source zip (minus node_modules/.next/.git/.env*) at session
+  start, and Claude delivers edited files or a project-structure zip to apply by
+  hand. Note the container's own working folder still does NOT persist between
+  sessions; project-knowledge files are read-only reference, not a working tree.
 - **Conversation history does NOT carry between chats** (memory is off). This file +
   session transcripts/journal are the continuity mechanism.
 - **Auth dead-state:** session-without-users-row. `useAuth` self-heals now; if it
@@ -189,6 +222,11 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
   hotfix duplication); requireClubOwner auth-helper extraction; Supabase type
   generation (many `as any`); a DB trigger for subscription auto-provisioning;
   billing_events audit log; 3-day trial reminder.
+- **Known data bug (M3, not urgent):** at least one `club_subscriptions` row has the
+  incoherent pair `plan='free'` + `status='trialing'`. Gating still works (`club_is_pro`
+  keys off status), but the combination is contradictory and points at the trial path
+  in `billing-provision.ts` setting status without a matching plan. Worth fixing before
+  real subscription volume so billing reporting isn't confused.
 - **Next feature (roadmap-committed):** Stripe Connect payments for classes/
   tournaments. Validate demand during/after beta before building deep.
 
