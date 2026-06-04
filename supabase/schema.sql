@@ -2,7 +2,7 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0029. This file is the source
+-- reflecting the end state of migrations 0002–0030. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
@@ -836,7 +836,11 @@ grant select on public.public_events to anon, authenticated;
 -- player_lifetime_stats: per-player career totals across ALL scoring activity
 -- types (league, tournament, open_play — not class). Distinct from leaderboard,
 -- which is per-activity and league/tournament-only. Feeds the dashboard
--- "Lifetime" panel. security_invoker so it respects game_scores RLS (migration 0029).
+-- "Lifetime" panel. security_invoker so it respects game_scores RLS.
+-- NOTE: intentionally does NOT filter on deleted_at (migration 0030) — archiving
+-- (soft-deleting) a season preserves its contribution to lifetime stats; only a
+-- hard delete of the activity (cascade) removes scores, and the app only hard-
+-- deletes activities with no scored games.
 create or replace view public.player_lifetime_stats with (security_invoker = true) as
 select
   gs.player_id as user_id,
@@ -846,8 +850,8 @@ select
 from game_scores gs
 join games g on g.id = gs.game_id
 join tables t on t.id = g.table_id
-join events e on e.id = t.event_id and e.deleted_at is null
-join activities a on a.id = e.activity_id and a.deleted_at is null
+join events e on e.id = t.event_id
+join activities a on a.id = e.activity_id
 where a.type in ('league', 'tournament', 'open_play')
 group by gs.player_id;
 

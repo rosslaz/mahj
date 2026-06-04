@@ -76,14 +76,59 @@ export default function ActivitySettingsPage() {
   }
 
   async function deleteActivity() {
+    if (!act.activity) return;
     setDeleting(true);
-    const { error: delErr } = await supabase
-      .from('activities')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', act.activity!.id);
-    setDeleting(false);
-    if (delErr) { alert(delErr.message); return; }
-    router.push(`/c/${clubSlug}`);
+    try {
+      // Decide soft vs hard delete based on whether ANY game under this
+      // activity has been scored. Rationale:
+      //   - Has scored games  → SOFT delete (set deleted_at). Hides the
+      //     activity from standings but preserves players' lifetime stats,
+      //     which are permanent (see player_lifetime_stats, migration 0030).
+      //   - No scored games   → HARD delete. Nothing of lifetime value exists,
+      //     so don't leave a soft-deleted ghost behind; the FK cascade
+      //     (activity → events → tables → games) cleans it up entirely.
+      //
+      // Find the games under this activity, then check for any scores.
+      const { data: eventRows } = await supabase
+        .from('events')
+        .select('id, tables(games(id))')
+        .eq('activity_id', act.activity.id);
+      const gameIds: string[] = [];
+      ((eventRows as any[]) || []).forEach((e) =>
+        (e.tables || []).forEach((t: any) =>
+          (t.games || []).forEach((g: any) => gameIds.push(g.id))
+        )
+      );
+
+      let hasScores = false;
+      if (gameIds.length > 0) {
+        const { count } = await supabase
+          .from('game_scores')
+          .select('id', { count: 'exact', head: true })
+          .in('game_id', gameIds);
+        hasScores = (count ?? 0) > 0;
+      }
+
+      if (hasScores) {
+        // Soft delete — preserve history + lifetime stats.
+        const { error: delErr } = await supabase
+          .from('activities')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', act.activity.id);
+        if (delErr) throw delErr;
+      } else {
+        // Hard delete — empty activity, cascade it away.
+        const { error: delErr } = await supabase
+          .from('activities')
+          .delete()
+          .eq('id', act.activity.id);
+        if (delErr) throw delErr;
+      }
+      router.push(`/c/${clubSlug}`);
+    } catch (err: any) {
+      setDeleting(false);
+      alert(err.message);
+    }
   }
 
   return (
@@ -148,7 +193,10 @@ export default function ActivitySettingsPage() {
         <div>
           <p className="font-medium mb-1">Delete activity</p>
           <p className="text-sm text-ink/60 mb-4">
-            Soft-deletes the activity and its events. Recoverable with database access.
+            Removes the activity from your club. If any games have been scored,
+            it&apos;s archived (hidden from standings) and those results still
+            count toward players&apos; lifetime stats. If nothing&apos;s been
+            scored yet, it&apos;s deleted outright.
           </p>
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)} className="btn" style={{ background: '#9c2c1f', color: '#f5efe6' }}>
