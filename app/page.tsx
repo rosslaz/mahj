@@ -179,20 +179,20 @@ function HomePageInner() {
       }
       setUpcomingAll(allUpcoming);
 
-      // -------- Lifetime stats: aggregate across all leaderboard rows --------
-      const { data: lbRows } = await supabase
-        .from('leaderboard')
+      // -------- Lifetime stats: one row per player, across all scoring
+      // activity types (league, tournament, open_play) — NOT class. This is
+      // the player_lifetime_stats view (migration 0029), distinct from the
+      // league-standings `leaderboard` view which is league/tournament-only.
+      const { data: lifeRow } = await supabase
+        .from('player_lifetime_stats')
         .select('total_points, total_wins, games_played')
-        .eq('user_id', auth.userId);
-      const agg = ((lbRows as any[]) || []).reduce(
-        (a, r) => ({
-          games_played: a.games_played + (r.games_played || 0),
-          total_wins: a.total_wins + (r.total_wins || 0),
-          total_points: a.total_points + (r.total_points || 0),
-        }),
-        { games_played: 0, total_wins: 0, total_points: 0 }
-      );
-      setStats(agg);
+        .eq('user_id', auth.userId)
+        .maybeSingle();
+      setStats({
+        games_played: (lifeRow as any)?.games_played ?? 0,
+        total_wins: (lifeRow as any)?.total_wins ?? 0,
+        total_points: (lifeRow as any)?.total_points ?? 0,
+      });
 
       // -------- Action items --------
       const items: ActionItem[] = [];

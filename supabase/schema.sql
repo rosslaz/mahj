@@ -2,7 +2,7 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0028. This file is the source
+-- reflecting the end state of migrations 0002–0029. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
@@ -832,6 +832,26 @@ where e.deleted_at is null
   and c.is_public = true;
 
 grant select on public.public_events to anon, authenticated;
+
+-- player_lifetime_stats: per-player career totals across ALL scoring activity
+-- types (league, tournament, open_play — not class). Distinct from leaderboard,
+-- which is per-activity and league/tournament-only. Feeds the dashboard
+-- "Lifetime" panel. security_invoker so it respects game_scores RLS (migration 0029).
+create or replace view public.player_lifetime_stats with (security_invoker = true) as
+select
+  gs.player_id as user_id,
+  coalesce(sum(gs.points), 0)::int as total_points,
+  coalesce(sum(case when gs.is_winner then 1 else 0 end), 0)::int as total_wins,
+  count(distinct gs.game_id)::int as games_played
+from game_scores gs
+join games g on g.id = gs.game_id
+join tables t on t.id = g.table_id
+join events e on e.id = t.event_id and e.deleted_at is null
+join activities a on a.id = e.activity_id and a.deleted_at is null
+where a.type in ('league', 'tournament', 'open_play')
+group by gs.player_id;
+
+grant select on public.player_lifetime_stats to authenticated;
 
 -- ============================================================
 -- TRIGGERS
