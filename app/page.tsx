@@ -14,6 +14,7 @@ import { ACTIVITY_TYPE_LABEL, type ActivityType, activityHasScoring } from '@/li
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import NearYou from '@/components/NearYou';
+import { ToastProvider, useToast } from '@/components/Toast';
 import { notifySignupCreated, notifySignupWithdrawn } from '@/app/actions/notifications';
 
 type ClubCard = {
@@ -48,8 +49,17 @@ type LifetimeStats = {
 };
 
 export default function HomePage() {
+  return (
+    <ToastProvider>
+      <HomePageInner />
+    </ToastProvider>
+  );
+}
+
+function HomePageInner() {
   const auth = useAuth();
   const supabase = getBrowserSupabase();
+  const { toast } = useToast();
 
   const [clubs, setClubs] = useState<ClubCard[]>([]);
   const [upcomingAll, setUpcomingAll] = useState<UpcomingEventWithCtx[]>([]);
@@ -327,7 +337,7 @@ export default function HomePage() {
     if (!ev) return;
     const capacityMax = ev.num_tables * 5;
     if ((ev.signup_count ?? 0) >= capacityMax) {
-      alert('Signups filled up — refresh to see the latest.');
+      toast('Signups filled up — refresh to see the latest.', 'info');
       await load();
       return;
     }
@@ -342,30 +352,33 @@ export default function HomePage() {
       .select('id')
       .single();
     if (error) {
-      alert(error.message);
+      toast(error.message, 'error');
       return;
     }
     if (data?.id) {
       notifySignupCreated((data as any).id as string, 'approved').catch(() => {});
     }
+    toast('You’re signed up ✓', 'success');
     await load();
-  }, [auth.userId, supabase, upcomingAll, load]);
+  }, [auth.userId, supabase, upcomingAll, load, toast]);
 
   const handleQuickWithdraw = useCallback(async (eventId: string) => {
     if (!auth.userId) return;
-    if (!confirm('Withdraw from this event?')) return;
+    // No confirm: withdrawing is reversible (sign up again in one tap), so a
+    // gate would just be friction. A toast acknowledges the action instead.
     const { error } = await supabase
       .from('night_signups')
       .delete()
       .eq('event_id', eventId)
       .eq('player_id', auth.userId);
     if (error) {
-      alert(error.message);
+      toast(error.message, 'error');
       return;
     }
     notifySignupWithdrawn(eventId, auth.userId).catch(() => {});
+    toast('Withdrawn from this event', 'info');
     await load();
-  }, [auth.userId, supabase, load]);
+  }, [auth.userId, supabase, load, toast]);
 
   // -------------------- SIGNED OUT --------------------
   if (!auth.loading && !auth.email) {

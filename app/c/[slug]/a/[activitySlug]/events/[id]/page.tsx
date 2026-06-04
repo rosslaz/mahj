@@ -11,6 +11,7 @@ import { shuffle, formatTime12, windForGame, assignPlayersToTables, WIND_LABEL, 
 import { formatAddressLines } from '@/lib/address';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { ToastProvider, useToast, InlineConfirm, type ConfirmOptions } from '@/components/Toast';
 import {
   notifySignupCreated,
   notifySignupWithdrawn,
@@ -67,6 +68,14 @@ type Score = { id: string; game_id: string; player_id: string; points: number; i
 type GPW = { game_id: string; player_id: string; wind: Wind | null; is_sitting_out: boolean };
 
 export default function EventDetailPage() {
+  return (
+    <ToastProvider>
+      <EventDetailPageInner />
+    </ToastProvider>
+  );
+}
+
+function EventDetailPageInner() {
   const params = useParams();
   const router = useRouter();
   const clubSlug = params.slug as string;
@@ -76,6 +85,7 @@ export default function EventDetailPage() {
   const auth = useAuth();
   const cb = useClub(clubSlug);
   const act = useActivity(cb.club?.id, activitySlug);
+  const { toast, confirm } = useToast();
 
   const eventBasePath = `/c/${clubSlug}/a/${activitySlug}/events`;
 
@@ -93,13 +103,10 @@ export default function EventDetailPage() {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState<{ seatId: string; tableId: string } | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  // Transient toast shown briefly after a successful invite send. Lives on
-  // the page (not in the modal) so it persists across the modal's unmount.
-  const [inviteToast, setInviteToast] = useState<string | null>(null);
   // Pro state — used to gate the outside-email invite input. Server gate
   // is still authoritative.
   const [isPro, setIsPro] = useState<boolean | null>(null);
-  // Spinner state for the "Send reminder" button. Toast also reuses inviteToast.
+  // Spinner state for the "Send reminder" button.
   const [sendingReminder, setSendingReminder] = useState(false);
 
   // Event invitations (for hidden events). Loaded for everyone but the UI
@@ -221,13 +228,6 @@ export default function EventDetailPage() {
   // and other concurrent edits without manual refresh.
   useRefreshOnFocus(load, !!cb.club);
 
-  // Clear the invite-success toast after a few seconds
-  useEffect(() => {
-    if (!inviteToast) return;
-    const t = setTimeout(() => setInviteToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [inviteToast]);
-
   if (cb.loading || !cb.club) return null;
   if (loading) return <p className="text-ink/40 italic">Loading game night…</p>;
   if (!night) return <p className="text-ink/40 italic">Game night not found.</p>;
@@ -291,21 +291,20 @@ export default function EventDetailPage() {
       const proposedCity = updates.city ?? night.city;
       const proposedState = updates.state ?? night.state;
       if (!proposedCity || !proposedState) {
-        alert(
-          "This is a public event, which requires city and state. " +
-          "Set those on your profile or on the event before claiming host."
+        toast(
+          'This is a public event, which requires city and state. Set those on your profile or on the event before claiming host.',
+          'error'
         );
         return;
       }
     }
     const { error } = await supabase.from('events').update(updates).eq('id', id);
-    if (error) alert(error.message); else load();
+    if (error) toast(error.message, 'error'); else load();
   }
 
   async function releaseHost() {
-    if (!confirm('Release host? Someone else can then claim it.')) return;
     const { error } = await supabase.from('events').update({ host_player_id: null }).eq('id', id);
-    if (error) alert(error.message); else load();
+    if (error) toast(error.message, 'error'); else load();
   }
 
   async function selfSignup() {
@@ -314,7 +313,7 @@ export default function EventDetailPage() {
     // signing up to a public event, status='pending' — host must approve.
     const status: 'approved' | 'pending' = cb.isMember ? 'approved' : 'pending';
     if (status === 'approved' && approvedCount >= capacityMax) {
-      alert('Signups are full.');
+      toast('Signups are full.', 'info');
       return;
     }
     const { data, error } = await supabase.from('night_signups').insert({
@@ -323,11 +322,12 @@ export default function EventDetailPage() {
       player_id: auth.userId,
       status,
     }).select('id').single();
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, 'error'); return; }
     // Notify the host (fire and forget; load() will not wait on this)
     if (data?.id) {
       notifySignupCreated(data.id as string, status).catch(() => {});
     }
+    toast(status === 'pending' ? 'Request sent — awaiting host approval' : 'You’re signed up ✓', status === 'pending' ? 'info' : 'success');
     load();
   }
 
@@ -335,8 +335,9 @@ export default function EventDetailPage() {
     if (!auth.userId) return;
     const withdrawnUserId = auth.userId;
     const { error } = await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', auth.userId);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, 'error'); return; }
     notifySignupWithdrawn(id, withdrawnUserId).catch(() => {});
+    toast('Withdrawn from this event', 'info');
     load();
   }
 
@@ -344,24 +345,28 @@ export default function EventDetailPage() {
     if (!cb.club) return;
     // Capacity sanity check (host could be trying to approve into a full event)
     if (approvedCount >= capacityMax) {
-      if (!confirm(`The event is already at capacity (${capacityMax}). Approve anyway? It'll be over capacity.`)) return;
+      const ok = await confirm({
+        title: 'Over capacity',
+        message: `The event is already at capacity (${capacityMax}). Approve anyway? It'll be over capacity.`,
+        confirmLabel: 'Approve anyway',
+      });
+      if (!ok) return;
     }
     const { error } = await supabase
       .from('night_signups')
       .update({ status: 'approved' })
       .eq('id', signupId);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, 'error'); return; }
     notifySignupApproved(signupId).catch(() => {});
     load();
   }
 
   async function declinePending(signupId: string) {
-    if (!confirm('Decline this signup request? The user will not be approved.')) return;
     const { error } = await supabase
       .from('night_signups')
       .delete()
       .eq('id', signupId);
-    if (error) alert(error.message); else load();
+    if (error) toast(error.message, 'error'); else load();
   }
 
   async function handleSendReminder() {
@@ -370,25 +375,29 @@ export default function EventDetailPage() {
     // something to do by accident. Day-of reminders go out automatically
     // each morning anyway — this is for the "I added more attendees, push
     // again" case or testing.
-    if (!confirm(`Send a reminder push to all approved attendees for "${night?.name}"?`)) return;
+    const ok = await confirm({
+      title: 'Send reminder?',
+      message: `Send a reminder push to all approved attendees for "${night?.name}"?`,
+      confirmLabel: 'Send',
+    });
+    if (!ok) return;
     setSendingReminder(true);
-    setInviteToast(null);
     try {
       const res = await sendEventReminderNow(id);
       if (!res.ok) {
-        alert(res.error);
+        toast(res.error, 'error');
         return;
       }
       const { pushesDelivered, attendeesAttempted } = res;
       if (attendeesAttempted === 0) {
-        setInviteToast('No approved attendees to remind.');
+        toast('No approved attendees to remind.', 'info');
       } else if (pushesDelivered === 0) {
-        setInviteToast('Sent — but no devices received it (attendees may not have push enabled).');
+        toast('Sent — but no devices received it (attendees may not have push enabled).', 'info');
       } else {
-        setInviteToast(`Reminder sent — ${pushesDelivered} device${pushesDelivered === 1 ? '' : 's'} ✓`);
+        toast(`Reminder sent — ${pushesDelivered} device${pushesDelivered === 1 ? '' : 's'} ✓`, 'success');
       }
     } catch (e: any) {
-      alert(e?.message ?? 'Reminder failed.');
+      toast(e?.message ?? 'Reminder failed.', 'error');
     } finally {
       setSendingReminder(false);
     }
@@ -408,7 +417,7 @@ export default function EventDetailPage() {
       }
       // Refetch to pick up the new signup row + invite status
       await load();
-      setInviteToast(`You're in for "${night?.name}" ✓`);
+      toast(`You're in for "${night?.name}" ✓`, 'success');
     } catch (e: any) {
       setInviteActionError(e?.message || 'Failed to accept invitation.');
     } finally {
@@ -418,7 +427,13 @@ export default function EventDetailPage() {
 
   async function handleDeclineInvite() {
     if (respondingToInvite) return;
-    if (!confirm(`Decline the invitation to "${night?.name}"? This event will disappear from your view.`)) return;
+    const ok = await confirm({
+      title: 'Decline invitation?',
+      message: `Decline the invitation to "${night?.name}"? This event will disappear from your view.`,
+      confirmLabel: 'Decline',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setInviteActionError(null);
     setRespondingToInvite(true);
     try {
@@ -437,10 +452,17 @@ export default function EventDetailPage() {
   }
 
   async function handleCancelInvite(inviteId: string, name: string | null) {
-    if (!confirm(`Cancel invitation${name ? ` to ${name}` : ''}?`)) return;
+    const ok = await confirm({
+      title: 'Cancel invitation?',
+      message: `Cancel invitation${name ? ` to ${name}` : ''}?`,
+      confirmLabel: 'Cancel invitation',
+      cancelLabel: 'Keep it',
+      tone: 'danger',
+    });
+    if (!ok) return;
     const res = await cancelEventInvitation(inviteId);
     if (!res.ok) {
-      alert(res.error);
+      toast(res.error, 'error');
       return;
     }
     await load();
@@ -454,7 +476,7 @@ export default function EventDetailPage() {
       .map((s) => s.trim())
       .filter(Boolean);
     if (memberIds.length === 0 && outsideEmails.length === 0) {
-      alert('Pick at least one member or enter at least one email.');
+      toast('Pick at least one member or enter at least one email.', 'info');
       return;
     }
     setSendingMoreInvites(true);
@@ -466,14 +488,14 @@ export default function EventDetailPage() {
         welcomeMessage: addInviteWelcome.trim() || undefined,
       });
       if (!res.ok) {
-        alert(res.error);
+        toast(res.error, 'error');
         return;
       }
       const data = res.data!;
       const parts: string[] = [];
       if (data.membersInvited > 0) parts.push(`${data.membersInvited} member${data.membersInvited === 1 ? '' : 's'}`);
       if (data.outsideEmailsSent > 0) parts.push(`${data.outsideEmailsSent} outside email${data.outsideEmailsSent === 1 ? '' : 's'}`);
-      setInviteToast(parts.length > 0 ? `Invited ${parts.join(' + ')} ✓` : 'No new invitations sent.');
+      toast(parts.length > 0 ? `Invited ${parts.join(' + ')} ✓` : 'No new invitations sent.', parts.length > 0 ? 'success' : 'info');
       // Reset the form + reload
       setAddInviteMemberIds(new Set());
       setAddInviteEmails('');
@@ -481,7 +503,7 @@ export default function EventDetailPage() {
       setShowAddInvitesPanel(false);
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Failed to send invitations.');
+      toast(e?.message || 'Failed to send invitations.', 'error');
     } finally {
       setSendingMoreInvites(false);
     }
@@ -495,25 +517,32 @@ export default function EventDetailPage() {
       player_id: playerId,
       status: 'approved',  // host-added members bypass any approval flow
     });
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, 'error'); return; }
     notifyPlayerAdded(id, playerId).catch(() => {});
     setShowAddPlayer(false);
     load();
   }
 
   async function removePlayer(playerId: string) {
-    if (!confirm('Remove this player from the night?')) return;
     const { error } = await supabase.from('night_signups').delete().eq('event_id', id).eq('player_id', playerId);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, 'error'); return; }
     notifyPlayerRemoved(id, playerId).catch(() => {});
     load();
   }
 
   async function assignTables() {
     if (!night || !cb.club) return;
-    if (approvedCount < capacityMin) { alert(`Need at least ${capacityMin} approved players to assign tables.`); return; }
-    if (approvedCount > capacityMax) { alert(`Too many players. Max is ${capacityMax}.`); return; }
-    if (isAssigned && !confirm('Re-assign tables? Pending games will be wiped and re-seeded. Scored games are preserved.')) return;
+    if (approvedCount < capacityMin) { toast(`Need at least ${capacityMin} approved players to assign tables.`, 'info'); return; }
+    if (approvedCount > capacityMax) { toast(`Too many players. Max is ${capacityMax}.`, 'info'); return; }
+    if (isAssigned) {
+      const ok = await confirm({
+        title: 'Re-seat the tables?',
+        message: 'This shuffles everyone into fresh seats for any games not yet scored. Games you’ve already scored stay exactly as they are.',
+        confirmLabel: 'Re-seat',
+        cancelLabel: 'Keep current',
+      });
+      if (!ok) return;
+    }
 
     const total = approvedCount;
     const fivePlayerTables = total - capacityMin;
@@ -605,8 +634,9 @@ export default function EventDetailPage() {
       }
 
       await load();
+      toast(isAssigned ? 'Tables re-seated ✓' : 'Tables assigned ✓', 'success');
     } catch (e: any) {
-      alert('Failed to assign tables: ' + e.message);
+      toast('Failed to assign tables: ' + e.message, 'error');
     }
   }
 
@@ -617,7 +647,7 @@ export default function EventDetailPage() {
     const oldPlayerId = seat.player_id;
 
     const { error: seatErr } = await supabase.from('table_seats').update({ player_id: newPlayerId }).eq('id', seatId);
-    if (seatErr) { alert(seatErr.message); return; }
+    if (seatErr) { toast(seatErr.message, 'error'); return; }
 
     const tableGameIds = games.filter((g) => g.table_id === seat.table_id && g.status === 'pending').map((g) => g.id);
     if (tableGameIds.length > 0) {
@@ -640,7 +670,12 @@ export default function EventDetailPage() {
   }
 
   async function completeNight() {
-    if (!confirm('Mark this game night completed? You can reopen later.')) return;
+    const ok = await confirm({
+      title: 'End the night?',
+      message: 'Mark this game night completed. You can reopen it later if you need to.',
+      confirmLabel: 'End night',
+    });
+    if (!ok) return;
     await supabase.from('events').update({ status: 'completed' }).eq('id', id);
     load();
   }
@@ -658,11 +693,6 @@ export default function EventDetailPage() {
 
   return (
     <>
-      {inviteToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-jade text-bone px-5 py-3 shadow-lg border border-jade text-sm tracking-[0.05em] fade-up">
-          {inviteToast}
-        </div>
-      )}
       <PullToRefresh onRefresh={load}>
     <div className="space-y-12">
       <header className="flex items-end justify-between flex-wrap gap-4">
@@ -702,7 +732,13 @@ export default function EventDetailPage() {
             <button onClick={claimHost} className="btn btn-jade">Host this night</button>
           )}
           {canManage && host && (
-            <button onClick={releaseHost} className="btn btn-ghost text-xs">Release host</button>
+            <InlineConfirm
+              confirmLabel="Release"
+              onConfirm={releaseHost}
+              render={(arm) => (
+                <button onClick={arm} className="btn btn-ghost text-xs">Release host</button>
+              )}
+            />
           )}
           {canManage && night.status === 'active' && <button onClick={completeNight} className="btn">End Night</button>}
           {canManage && night.status === 'completed' && <button onClick={reopenNight} className="btn btn-ghost">Reopen</button>}
@@ -806,19 +842,25 @@ export default function EventDetailPage() {
                       <span className="font-medium">{member?.name || `User ${s.player_id.slice(0, 8)}`}</span>
                       {!member && <span className="text-ink/40 ml-2 text-xs italic">not a club member</span>}
                     </span>
-                    <span className="flex gap-2">
+                    <span className="flex gap-2 items-center">
                       <button
                         onClick={() => approvePending(s.id)}
                         className="text-xs tracking-[0.15em] uppercase text-jade hover:underline"
                       >
                         Approve
                       </button>
-                      <button
-                        onClick={() => declinePending(s.id)}
-                        className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
-                      >
-                        Decline
-                      </button>
+                      <InlineConfirm
+                        confirmLabel="Decline"
+                        onConfirm={() => declinePending(s.id)}
+                        render={(arm) => (
+                          <button
+                            onClick={arm}
+                            className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                          >
+                            Decline
+                          </button>
+                        )}
+                      />
                     </span>
                   </li>
                 );
@@ -843,13 +885,19 @@ export default function EventDetailPage() {
                 >
                   <span>{member?.name || '—'}</span>
                   {canManage && !isAssigned && (
-                    <button
-                      onClick={() => removePlayer(s.player_id)}
-                      className="text-ink/30 hover:text-cinnabar text-xs"
-                      title="Remove"
-                    >
-                      ×
-                    </button>
+                    <InlineConfirm
+                      confirmLabel="Remove"
+                      onConfirm={() => removePlayer(s.player_id)}
+                      render={(arm) => (
+                        <button
+                          onClick={arm}
+                          className="text-ink/30 hover:text-cinnabar text-xs"
+                          title="Remove"
+                        >
+                          ×
+                        </button>
+                      )}
+                    />
                   )}
                 </span>
               );
@@ -871,7 +919,18 @@ export default function EventDetailPage() {
                 ? `${capacityMin - approvedCount} more player${capacityMin - approvedCount === 1 ? '' : 's'} needed.`
                 : approvedCount > capacityMax
                 ? `${approvedCount - capacityMax} too many. Remove some.`
-                : `Players will be seated to balance sit-outs over time. Players who have sat out the least will land at 5-player tables, and within those, the least-sat are seated to sit out games 1${night.games_planned >= 2 ? `–${Math.min(night.games_planned, 5)}` : ''}.`}
+                : (
+                  <>
+                    Seating balances sit-outs over the season.{' '}
+                    <details className="inline">
+                      <summary className="inline cursor-pointer text-ink/60 hover:text-ink underline">How does this work?</summary>
+                      <span className="block mt-1 not-italic text-ink/50">
+                        Players who have sat out the least land at 5-player tables, and within those,
+                        the least-sat are seated to sit out games 1{night.games_planned >= 2 ? `–${Math.min(night.games_planned, 5)}` : ''}.
+                      </span>
+                    </details>
+                  </>
+                )}
             </p>
           </div>
         )}
@@ -1024,12 +1083,18 @@ export default function EventDetailPage() {
                     <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
                     <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar">Pending</span>
                   </div>
-                  <button
-                    onClick={() => handleCancelInvite(inv.id, inv.invitee_name)}
-                    className="text-xs text-ink/50 hover:text-cinnabar"
-                  >
-                    Cancel
-                  </button>
+                  <InlineConfirm
+                    confirmLabel="Cancel invitation"
+                    onConfirm={() => handleCancelInvite(inv.id, inv.invitee_name)}
+                    render={(arm) => (
+                      <button
+                        onClick={arm}
+                        className="text-xs text-ink/50 hover:text-cinnabar"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  />
                 </div>
               ))}
               {/* Accepted */}
@@ -1103,7 +1168,7 @@ export default function EventDetailPage() {
             // unmount the modal anyway. Show a toast on the page so the user
             // gets the confirmation after the page settles.
             setShowInviteModal(false);
-            setInviteToast(`Calendar invites sent to ${sentCount} ✓`);
+            toast(`Calendar invites sent to ${sentCount} ✓`, 'success');
             load();
           }}
         />
@@ -1134,6 +1199,8 @@ export default function EventDetailPage() {
           gpws={gpws[activeGame.gameId] || []}
           members={members}
           existingScores={scores[activeGame.gameId] || []}
+          confirm={confirm}
+          toast={toast}
           onClose={() => setActiveGame(null)}
           onSaved={async () => { setActiveGame(null); await load(); }}
         />
@@ -1328,10 +1395,13 @@ function SwapPlayerModal({
 
 // ============================================================
 function ScoreEntryModal({
-  gameId, tableSeats, gpws, members, existingScores, onClose, onSaved,
+  gameId, tableSeats, gpws, members, existingScores, confirm, toast, onClose, onSaved,
 }: {
   gameId: string; tableSeats: Seat[]; gpws: GPW[]; members: Member[];
-  existingScores: Score[]; onClose: () => void; onSaved: () => void;
+  existingScores: Score[];
+  confirm: (opts: ConfirmOptions) => Promise<boolean>;
+  toast: (message: string, variant?: 'success' | 'error' | 'info') => void;
+  onClose: () => void; onSaved: () => void;
 }) {
   const supabase = getBrowserSupabase();
 
@@ -1412,7 +1482,13 @@ function ScoreEntryModal({
   }
 
   async function clearAndClose() {
-    if (!confirm('Clear this game\'s result?')) return;
+    const ok = await confirm({
+      title: 'Clear this result?',
+      message: 'This clears the recorded result and sets the game back to unscored.',
+      confirmLabel: 'Clear result',
+      tone: 'danger',
+    });
+    if (!ok) return;
     await supabase.from('game_scores').delete().eq('game_id', gameId);
     await supabase.from('games').update({ status: 'pending' }).eq('id', gameId);
     onSaved();
