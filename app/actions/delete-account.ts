@@ -17,7 +17,9 @@ type Result = { ok: true } | { ok: false; error: string };
  *   1. Reassign any events they host to the club owner (with notification)
  *   2. Anonymize their users row (PII fields → null, name → '[deleted user]', deleted_at set)
  *   3. Cascade-delete personal data: push subs, notification prefs, legal acceptances,
- *      their club memberships, their signups
+ *      their signups, and club memberships EXCEPT in clubs where they have scored
+ *      games (those memberships are retained, inert, so the leaderboard keeps
+ *      attributing their preserved scores to the anonymized stub)
  *   4. Game scores are PRESERVED with the anonymized user attribution
  *   5. Delete the auth.users row (so they can no longer sign in)
  *   6. Send confirmation email via Resend
@@ -43,10 +45,33 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
   // confirmation email and auth_user_id for the auth.users delete.
   const { data: userRow } = await supabase
     .from('users')
-    .select('id, email, name, auth_user_id')
+    .select('id, email, name, auth_user_id, deleted_at')
     .eq('id', userId)
     .maybeSingle();
   if (!userRow) return { ok: false, error: 'User record not found.' };
+
+  // ------------------------------------------------------------
+  // Idempotency guard.
+  //
+  // This function performs many sequential writes across auth + several
+  // tables with no enclosing transaction (a Server Action can't wrap the
+  // auth.admin call and the PostgREST writes in one Postgres txn). If a
+  // prior invocation failed partway, the users row may already be
+  // anonymized (deleted_at set) while the terminal auth-row delete and/or
+  // confirmation email never completed. Re-running the full sequence on an
+  // already-anonymized row would operate on torn state (memberships gone,
+  // PII already null). So if we detect an already-deleted row, we skip
+  // straight to retrying ONLY the idempotent terminal steps and return.
+  // ------------------------------------------------------------
+  if ((userRow as any).deleted_at) {
+    const priorAuthUserId = (userRow as any).auth_user_id as string | null;
+    if (priorAuthUserId) {
+      // auth_user_id is nulled during anonymization, so if it's still set the
+      // prior run failed before/at the auth delete. Retry it; ignore errors.
+      await getServiceSupabase().auth.admin.deleteUser(priorAuthUserId).catch(() => {});
+    }
+    return { ok: true };
+  }
 
   const userEmail = (userRow as any).email as string;
   const userName = (userRow as any).name as string;
@@ -207,12 +232,38 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
   await serviceClient.from('notification_preferences').delete().eq('user_id', userId);
   // Legal acceptances
   await serviceClient.from('legal_acceptances').delete().eq('user_id', userId);
-  // Club memberships
-  await serviceClient.from('club_members').delete().eq('user_id', userId);
+  // Club memberships — but PRESERVE memberships in clubs where this user has
+  // scored games. The `leaderboard` view inner-joins club_members, so deleting
+  // the membership would drop the user's historical results out of standings
+  // entirely — silently defeating the "game_scores are preserved" intent
+  // below. We therefore remove memberships only for clubs where the user has
+  // no scores to strand. Retained membership rows are inert: auth_user_id is
+  // nulled during anonymization (Step 3), so current_user_id() can never
+  // resolve to this user again — the membership grants no live access, it
+  // only keeps the leaderboard join intact for the anonymized stub.
+  const { data: scoredRows } = await serviceClient
+    .from('game_scores')
+    .select('club_id')
+    .eq('player_id', userId);
+  const clubsWithScores = new Set(((scoredRows as any[]) || []).map((r) => r.club_id));
+
+  const { data: membershipRows } = await serviceClient
+    .from('club_members')
+    .select('id, club_id')
+    .eq('user_id', userId);
+  const removableMembershipIds = ((membershipRows as any[]) || [])
+    .filter((m) => !clubsWithScores.has(m.club_id))
+    .map((m) => m.id);
+
+  if (removableMembershipIds.length > 0) {
+    await serviceClient.from('club_members').delete().in('id', removableMembershipIds);
+  }
   // Their event signups
   await serviceClient.from('night_signups').delete().eq('player_id', userId);
   // NOTE: game_scores are intentionally NOT deleted — they remain attached
-  // to this user_id, which will be anonymized below.
+  // to this user_id, which will be anonymized below. (See the membership
+  // preservation above: the leaderboard view needs the club_members row to
+  // keep these scores visible in standings.)
 
   // ------------------------------------------------------------
   // Step 3: Anonymize the users row
