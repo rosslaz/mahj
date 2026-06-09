@@ -27,14 +27,22 @@ import { isValidSlug } from '@/lib/slug';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
-// Map the Postgres check_violation our triggers raise into a clean message.
-// Trigger messages are already human-readable, so we just pass them through;
-// this helper exists so callers don't leak raw "new row violates..." text.
+// Map a Postgres error into a clean, client-safe message. Our triggers raise
+// check_violation (23514) with already-human-readable text, so we pass those
+// through. Everything else gets a curated message by code, with the raw error
+// logged server-side rather than returned to the client (raw PostgREST/Postgres
+// text can leak column/constraint/policy names and is cryptic to end users).
 function friendlyDbError(err: { code?: string; message?: string } | null): string {
   if (!err) return 'Write failed.';
-  // 23514 = check_violation (our triggers use this errcode)
+  // 23514 = check_violation — our free-tier triggers use this with friendly text.
   if (err.code === '23514' && err.message) return err.message;
-  return err.message || 'Write failed.';
+  // 23505 = unique_violation, 23503 = foreign_key_violation, 42501 = RLS/permission.
+  if (err.code === '23505') return 'That already exists.';
+  if (err.code === '23503') return 'That references something that no longer exists.';
+  if (err.code === '42501') return 'You don’t have permission to do that.';
+  // Anything else: log the detail for us, return a generic message to the user.
+  console.error('[gated-writes] unmapped db error:', err);
+  return 'Something went wrong saving that. Please try again.';
 }
 
 async function callerRoleInClub(clubId: string, userId: string): Promise<string | null> {
