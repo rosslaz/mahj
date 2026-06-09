@@ -44,19 +44,28 @@ export function useAuth(): AuthState {
         .eq('auth_user_id', authUserId)
         .maybeSingle();
 
-      // 2. Not found by auth_user_id — try by email. A row may exist from an
-      //    email invite that was never linked to this auth account yet.
+      // 2. Not found by auth_user_id. A users row may exist from an email
+      //    invite that was never linked to this auth account. Delegate the
+      //    link to the server-side link_auth_to_user() RPC, which links a
+      //    row by email ONLY when it is currently unlinked, and REFUSES to
+      //    clobber a row already bound to a different auth account.
+      //
+      //    SECURITY: we do NOT trust the RPC's return value as "this row is
+      //    mine" — when the matching row belongs to a different auth account
+      //    the RPC leaves it untouched but STILL returns its id. So after
+      //    calling it we re-fetch strictly by our OWN auth_user_id. If the
+      //    RPC linked an unlinked row, this finds it; if the row belonged to
+      //    someone else, this finds nothing and we fall through to self-heal
+      //    (step 3), which creates a fresh row. This closes the hijack where
+      //    a blind `update auth_user_id` could steal another account's row.
       if (!data) {
+        await supabase.rpc('link_auth_to_user');
         const r2 = await supabase
           .from('users')
           .select('id, name, email')
-          .ilike('email', email)
+          .eq('auth_user_id', authUserId)
           .maybeSingle();
         data = r2.data;
-        if (data) {
-          // Found by email → link it for next time.
-          await supabase.from('users').update({ auth_user_id: authUserId }).eq('id', (data as any).id);
-        }
       }
 
       // 3. SELF-HEAL: still no row means this authenticated session was never

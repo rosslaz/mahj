@@ -2,7 +2,7 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0030. This file is the source
+-- reflecting the end state of migrations 0002–0031. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
@@ -715,6 +715,10 @@ begin
     raise exception 'Free clubs cannot create % activities. Upgrade to Pro.', NEW.type using errcode = 'check_violation';
   end if;
 
+  -- Serialize concurrent activity inserts for THIS club so the count can't
+  -- race (TOCTOU); txn-scoped, auto-released. (migration 0031)
+  perform pg_advisory_xact_lock(hashtext('activities:' || NEW.club_id::text));
+
   select count(*) into v_count
   from activities
   where club_id = NEW.club_id and deleted_at is null;
@@ -748,6 +752,10 @@ begin
   if v_is_pro then
     return NEW;
   end if;
+
+  -- Serialize concurrent member inserts for THIS club so the count can't
+  -- race (TOCTOU); txn-scoped, auto-released. (migration 0031)
+  perform pg_advisory_xact_lock(hashtext('club_members:' || NEW.club_id::text));
 
   select count(*) into v_count from club_members where club_id = NEW.club_id;
   if v_count >= 5 then
