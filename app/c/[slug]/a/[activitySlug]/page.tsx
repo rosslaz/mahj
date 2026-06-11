@@ -9,6 +9,7 @@ import { useClub } from '@/lib/use-club';
 import { useActivity, ACTIVITY_TYPE_LABEL, activityHasScoring } from '@/lib/use-activity';
 import { NextEventCard, type NextEventNight, type PersonalStatus } from '@/components/NextEventCard';
 import { etToday } from '@/lib/dates';
+import { ToastProvider, useToast } from '@/components/Toast';
 
 type LeaderboardRow = {
   user_id: string;
@@ -26,6 +27,14 @@ type RecentResult = {
 };
 
 export default function ActivityOverview() {
+  return (
+    <ToastProvider>
+      <ActivityOverviewInner />
+    </ToastProvider>
+  );
+}
+
+function ActivityOverviewInner() {
   const params = useParams();
   const clubSlug = params.slug as string;
   const activitySlug = params.activitySlug as string;
@@ -33,6 +42,7 @@ export default function ActivityOverview() {
   const cb = useClub(clubSlug);
   const act = useActivity(cb.club?.id, activitySlug);
   const supabase = getBrowserSupabase();
+  const { toast } = useToast();
 
   const [nextEvent, setNextEvent] = useState<NextEventNight | null>(null);
   const [personalStatus, setPersonalStatus] = useState<PersonalStatus>({ kind: 'none' });
@@ -52,7 +62,7 @@ export default function ActivityOverview() {
       const today = etToday();
 
       // Next event in this activity
-      const { data: upcomingData } = await supabase
+      const { data: upcomingData, error: upErr } = await supabase
         .from('events')
         .select('id, name, date, start_time, num_tables, games_planned, status, host:host_player_id(id, name), tables(assigned)')
         .eq('activity_id', act.activity!.id)
@@ -62,6 +72,13 @@ export default function ActivityOverview() {
         .order('date', { ascending: true })
         .order('start_time', { ascending: true })
         .limit(1);
+      // U-7: a failed query is not "nothing scheduled". Keep the current
+      // state and surface the failure instead of lying with empty panels.
+      if (upErr) {
+        toast('Could not refresh this activity — check your connection.', 'error');
+        setLoading(false);
+        return;
+      }
 
       let nextN: NextEventNight | null = null;
       let pStatus: PersonalStatus = { kind: 'none' };
@@ -104,12 +121,17 @@ export default function ActivityOverview() {
 
       // Leaderboard (only for scoring activities)
       if (hasScoring) {
-        const { data: lbAll } = await supabase
+        const { data: lbAll, error: lbErr } = await supabase
           .from('leaderboard')
           .select('user_id, name, total_points, total_wins')
           .eq('activity_id', act.activity!.id)
           .order('total_points', { ascending: false })
           .order('total_wins', { ascending: false });
+        if (lbErr) {
+          toast('Could not refresh the standings.', 'error');
+          setLoading(false);
+          return;
+        }
         const lbRows = (lbAll as LeaderboardRow[]) || [];
         setTopPlayers(lbRows.slice(0, 5));
         if (auth.userId) {
@@ -182,7 +204,7 @@ export default function ActivityOverview() {
 
       setLoading(false);
     })();
-  }, [act.activity, cb.club, auth.userId, hasScoring, supabase]);
+  }, [act.activity, cb.club, auth.userId, hasScoring, supabase, toast]);
 
   if (!act.activity) return null;
 

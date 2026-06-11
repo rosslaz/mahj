@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/use-auth';
@@ -12,6 +12,14 @@ export default function JoinClubPage() {
   const auth = useAuth();
 
   const [code, setCode] = useState('');
+
+  // Prefill from ?code= so shared invite links are one-tap (UX audit U-8).
+  // Reads window.location instead of useSearchParams to avoid the Suspense
+  // boundary next build requires for that hook on client pages.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('code');
+    if (c) setCode(c.toUpperCase());
+  }, []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

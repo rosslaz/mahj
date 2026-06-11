@@ -9,6 +9,7 @@ import { useClub } from '@/lib/use-club';
 import { ACTIVITY_TYPE_LABEL, type ActivityType } from '@/lib/use-activity';
 import ClubInvitesPanel from '@/components/ClubInvitesPanel';
 import { checkCanPromoteAdmin } from '@/app/actions/billing-gates';
+import { ToastProvider, useToast } from '@/components/Toast';
 
 type Member = {
   user_id: string;
@@ -26,11 +27,23 @@ type Activity = {
 };
 
 export default function ClubAdminPage() {
+  return (
+    <ToastProvider>
+      <ClubAdminPageInner />
+    </ToastProvider>
+  );
+}
+
+function ClubAdminPageInner() {
   const params = useParams();
   const slug = params.slug as string;
   const auth = useAuth();
   const cb = useClub(slug);
   const supabase = getBrowserSupabase();
+  // Styled dialogs + toasts (U-6) — replaces native confirm()/alert(), which
+  // render as jarring OS chrome inside the standalone PWA. Note: `confirm`
+  // deliberately shadows window.confirm so nothing here can reach for it.
+  const { toast, confirm } = useToast();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -116,30 +129,75 @@ export default function ClubAdminPage() {
     if (newRole === 'admin') {
       const gate = await checkCanPromoteAdmin(cb.club.id);
       if (!gate.ok) {
-        alert(gate.error);
+        toast(gate.error ?? 'Cannot promote an admin right now.', 'error');
         return;
       }
     }
     const { error } = await supabase.from('club_members').update({ role: newRole }).eq('club_id', cb.club.id).eq('user_id', userId);
-    if (error) alert(error.message); else load();
+    if (error) toast(error.message, 'error'); else load();
   }
 
   async function removeMember(userId: string, name: string) {
     if (!cb.club) return;
-    if (!confirm('Remove ' + name + ' from the club? Their historical scores will remain.')) return;
+    const ok = await confirm({
+      title: 'Remove ' + name + '?',
+      message: 'They will be removed from ' + cb.club.name + '. Their historical scores will remain.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!ok) return;
     const { error } = await supabase.from('club_members').delete().eq('club_id', cb.club.id).eq('user_id', userId);
-    if (error) alert(error.message); else load();
+    if (error) toast(error.message, 'error'); else load();
   }
 
   async function regenerateCode() {
     if (!cb.club) return;
-    if (!confirm('Generate a new join code? The old code will stop working.')) return;
+    const ok = await confirm({
+      title: 'Generate a new join code?',
+      message: 'The old code stops working immediately — anyone you already sent it to will need the new one.',
+      confirmLabel: 'Generate new code',
+      tone: 'danger',
+    });
+    if (!ok) return;
     const { data, error } = await supabase.rpc('generate_join_code');
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, 'error'); return; }
     const newCode = data as string;
     const { error: updErr } = await supabase.from('clubs').update({ join_code: newCode }).eq('id', cb.club.id);
-    if (updErr) alert(updErr.message);
-    else setJoinCode(newCode);
+    if (updErr) toast(updErr.message, 'error');
+    else { setJoinCode(newCode); toast('New join code generated', 'success'); }
+  }
+
+  // U-8: copy / native-share the join code — the product's main growth loop.
+  // Selecting letterspaced display text on a phone is fiddly; give it real
+  // affordances. navigator.share opens the OS share sheet in the PWA.
+  async function copyCode() {
+    if (!joinCode) return;
+    try {
+      await navigator.clipboard.writeText(joinCode);
+      toast('Join code copied', 'success');
+    } catch {
+      toast('Could not copy — long-press the code to copy it manually.', 'error');
+    }
+  }
+
+  async function shareCode() {
+    if (!joinCode || !cb.club) return;
+    const url = window.location.origin + '/clubs/join?code=' + joinCode;
+    const text = 'Join ' + cb.club.name + ' on Pungctual! Tap ' + url + ' or use code ' + joinCode + ' at pungctual.com/clubs/join';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Join ' + cb.club.name, text, url });
+      } catch {
+        // User dismissed the share sheet — not an error.
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('Invite copied — paste it anywhere', 'success');
+      } catch {
+        toast('Could not copy the invite.', 'error');
+      }
+    }
   }
 
   const filtered = members.filter((m) => {
@@ -206,11 +264,22 @@ export default function ClubAdminPage() {
         <div className="flex items-baseline justify-between mb-3 flex-wrap gap-3">
           <div>
             <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">Join Code</div>
-            <div className="font-display text-3xl tracking-[0.3em]">{joinCode || '—'}</div>
+            <button
+              type="button"
+              onClick={copyCode}
+              title="Tap to copy"
+              className="font-display text-3xl tracking-[0.3em] hover:text-jade transition-colors text-left"
+            >
+              {joinCode || '—'}
+            </button>
           </div>
-          <button onClick={regenerateCode} className="btn btn-ghost text-xs">Regenerate</button>
+          <div className="flex gap-2 flex-wrap items-center">
+            <button onClick={shareCode} className="btn text-xs">Share</button>
+            <button onClick={copyCode} className="btn btn-ghost text-xs">Copy</button>
+            <button onClick={regenerateCode} className="btn btn-ghost text-xs">Regenerate</button>
+          </div>
         </div>
-        <p className="text-xs text-ink/65 italic">Share this with new players. They enter it at <code>/clubs/join</code>.</p>
+        <p className="text-xs text-ink/65 italic">Share this with new players — the Share button sends a one-tap link, or they can enter the code at <code>/clubs/join</code>.</p>
         {isPro === false && (
           <div className={`mt-4 pt-4 border-t border-ink/10 text-xs flex items-baseline justify-between flex-wrap gap-2 ${
             atMemberCap ? 'text-cinnabar' : 'text-ink/65'

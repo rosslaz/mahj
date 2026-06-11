@@ -279,6 +279,16 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
     hygiene, no behavior change.
   - **L-3:** `readme.md.old` sitting in the repo root — fold anything still useful
     into this file, then delete.
+- **UX-audit leftovers** (see `UX_AUDIT_2026-06-11.md`; U-1 through U-9 fixed
+  2026-06-11, including the contrast/touch-target sweep, refresh-flash fix, score
+  RPC, styled admin dialogs, and join-code share):
+  - U-10–U-18 remain (breadcrumb tap targets, shared Modal wrapper with
+    Esc/focus-trap/aria, :focus-visible styles, skeleton loaders, reduced-motion,
+    sign-in resend button, number-input wheel guard, event-date prominence).
+  - Follow-up U-1/U-2 sweep on pages not yet covered: billing, profile, clubs
+    list/join/new, leaderboard page, legal pages, ClubInvitesPanel (~80 instances;
+    same mechanical mapping: /30→/50, /35→/55, /40→/60, /50→/65,
+    [10px]/[11px]→text-xs).
 - **Next feature (roadmap-committed):** Stripe Connect payments for classes/
   tournaments. Validate demand during/after beta before building deep.
 

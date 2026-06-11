@@ -11,6 +11,7 @@ import { NextEventCard, type NextEventNight, type PersonalStatus } from '@/compo
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { etToday } from '@/lib/dates';
+import { ToastProvider, useToast } from '@/components/Toast';
 
 type ActivityCard = {
   id: string;
@@ -30,11 +31,20 @@ type UpcomingEvent = NextEventNight & {
 };
 
 export default function ClubOverview() {
+  return (
+    <ToastProvider>
+      <ClubOverviewInner />
+    </ToastProvider>
+  );
+}
+
+function ClubOverviewInner() {
   const params = useParams();
   const slug = params.slug as string;
   const auth = useAuth();
   const cb = useClub(slug);
   const supabase = getBrowserSupabase();
+  const { toast } = useToast();
 
   const [activities, setActivities] = useState<ActivityCard[]>([]);
   const [nextEvent, setNextEvent] = useState<UpcomingEvent | null>(null);
@@ -54,12 +64,20 @@ export default function ClubOverview() {
   const load = useCallback(async () => {
     if (!cb.club) return;
     // Activities in this club
-    const { data: actData } = await supabase
+    const { data: actData, error: actErr } = await supabase
       .from('activities')
       .select('id, slug, name, description, type, is_public, deleted_at')
       .eq('club_id', cb.club!.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
+    // U-7: a failed query is not an empty club. Keep whatever's already on
+    // screen and say so, instead of rendering a confident lie ("No
+    // activities yet") over a network blip.
+    if (actErr) {
+      toast('Could not refresh the club — check your connection.', 'error');
+      setLoading(false);
+      return;
+    }
     const acts = ((actData as any[]) || []).map((a) => ({
       id: a.id, slug: a.slug, name: a.name, description: a.description,
       type: a.type as ActivityType, is_public: a.is_public,
@@ -68,7 +86,7 @@ export default function ClubOverview() {
 
     // Next event across all activities in this club
     const today = etToday();
-    const { data: gnData } = await supabase
+    const { data: gnData, error: gnErr } = await supabase
       .from('events')
       .select('id, name, date, start_time, num_tables, games_planned, status, activity_id, host:host_player_id(id, name), tables(assigned)')
       .eq('club_id', cb.club!.id)
@@ -78,6 +96,11 @@ export default function ClubOverview() {
       .order('date', { ascending: true })
       .order('start_time', { ascending: true })
       .limit(1);
+    if (gnErr) {
+      toast('Could not refresh upcoming events.', 'error');
+      setLoading(false);
+      return;
+    }
 
     let next: UpcomingEvent | null = null;
     if (gnData && gnData.length > 0) {
@@ -154,7 +177,7 @@ export default function ClubOverview() {
     }
 
     setLoading(false);
-  }, [cb.club, auth.userId, supabase]);
+  }, [cb.club, auth.userId, supabase, toast]);
 
   useEffect(() => { load(); }, [load]);
   useRefreshOnFocus(load, !!cb.club);
