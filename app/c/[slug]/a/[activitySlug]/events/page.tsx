@@ -62,6 +62,10 @@ export default function ActivityEventsPage() {
   const [nights, setNights] = useState<Night[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  // True once the first load completes. Background refreshes (focus refetch)
+  // keep the existing list rendered instead of flashing "Loading…" and
+  // collapsing the page height (UX audit U-3).
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [mode, setMode] = useState<'none' | 'night' | 'series'>('none');
   // Whether this club has any Pro plan active. Drives the upfront "Hidden
   // requires Pro" treatment on the visibility picker so users on Free see
@@ -220,6 +224,7 @@ export default function ActivityEventsPage() {
     }
 
     setLoading(false);
+    setHasLoaded(true);
   }
 
   useEffect(() => { if (cb.club && act.activity) load(); /* eslint-disable-next-line */ }, [cb.club, act.activity]);
@@ -781,7 +786,7 @@ export default function ActivityEventsPage() {
         );
       })()}
 
-      {loading ? (
+      {loading && !hasLoaded ? (
         <p className="text-ink/40 italic">Loading…</p>
       ) : nights.length === 0 ? (
         <div className="tile-border p-12 text-center">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
@@ -246,7 +246,12 @@ function EventDetailPageInner() {
   useRefreshOnFocus(load, !!cb.club);
 
   if (cb.loading || !cb.club) return null;
-  if (loading) return <p className="text-ink/40 italic">Loading game night…</p>;
+  // Show the loading screen only when there's nothing to show yet. On
+  // background refreshes (useRefreshOnFocus fires on every app-switch —
+  // constant during a live night) keep the stale page rendered and swap the
+  // data in place instead of blanking to "Loading…" and resetting scroll
+  // (UX audit U-3).
+  if (loading && !night) return <p className="text-ink/40 italic">Loading game night…</p>;
   if (!night) return <p className="text-ink/40 italic">Game night not found.</p>;
 
   const isHost = !!auth.userId && night.host_player_id === auth.userId;
@@ -1462,6 +1467,11 @@ function ScoreEntryModal({
 
   const [outcome, setOutcome] = useState<'winner' | 'wall' | null>(initialOutcome);
   const [winnerId, setWinnerId] = useState<string>(existingWinner?.player_id ?? '');
+  // Focus target for the points field. Focused from the winner button's tap
+  // handler — inside the user gesture, so iOS allows the keyboard — and only
+  // AFTER a winner is chosen, so the keyboard never slides up over the
+  // winner grid (UX audit U-4).
+  const pointsRef = useRef<HTMLInputElement>(null);
   const [pointsStr, setPointsStr] = useState<string>(existingWinner ? String(existingWinner.points) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1574,7 +1584,7 @@ function ScoreEntryModal({
                   <button
                     key={seat.player_id}
                     type="button"
-                    onClick={() => setWinnerId(seat.player_id)}
+                    onClick={() => { setWinnerId(seat.player_id); pointsRef.current?.focus(); }}
                     className={`p-3 border text-left transition-colors ${
                       winnerId === seat.player_id
                         ? 'bg-jade/10 border-jade'
@@ -1592,6 +1602,7 @@ function ScoreEntryModal({
             <div>
               <label className="label">Points</label>
               <input
+                ref={pointsRef}
                 type="number"
                 inputMode="numeric"
                 min={0}
@@ -1599,7 +1610,6 @@ function ScoreEntryModal({
                 value={pointsStr}
                 onChange={(e) => setPointsStr(e.target.value)}
                 placeholder="0"
-                autoFocus
               />
               <p className="text-xs text-ink/40 italic mt-1">Only the winner scores. No negatives.</p>
             </div>

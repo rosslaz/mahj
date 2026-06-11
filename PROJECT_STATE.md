@@ -264,6 +264,21 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
   keys off status), but the combination is contradictory and points at the trial path
   in `billing-provision.ts` setting status without a matching plan. Worth fixing before
   real subscription volume so billing reporting isn't confused.
+- **Code-audit leftovers** (see `CODE_AUDIT_2026-06-10.md`; H-1/H-2/H-3, M-1, M-2,
+  and L-1 were fixed 2026-06-11 — note the audit's M-3 is unrelated to the data-bug
+  M3 above):
+  - **M-3 — decision needed:** `notifyClubMemberLeft` (action) and
+    `dispatchClubMemberLeft` (lib/notifications) are fully built but nothing calls
+    them — admin `removeMember` is a bare delete and there's no self-service
+    leave-club. Either wire it into `removeMember` (exclude the acting admin from
+    recipients so they don't get notified about their own removal) or delete the
+    dead dispatcher + action. Don't leave it half-built.
+  - **L-2 — dead exports (~6 symbols):** `checkCanAddMember`, `checkCanCreateActivity`,
+    `checkCanSendEmailInvites` (billing-gates.ts); `sendPushToUsers` (push-server.ts);
+    `formatTime`, `WIND_ORDER` (game-utils.ts); `formatAddress` (address.ts). Pure
+    hygiene, no behavior change.
+  - **L-3:** `readme.md.old` sitting in the repo root — fold anything still useful
+    into this file, then delete.
 - **Next feature (roadmap-committed):** Stripe Connect payments for classes/
   tournaments. Validate demand during/after beta before building deep.
 
