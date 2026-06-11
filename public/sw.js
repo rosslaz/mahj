@@ -26,7 +26,7 @@ const STATIC_ASSETS = [
   '/icon-192.png',
   '/icon-512.png',
   '/pungctual-logo.png',
-  '/mahjong-bg.png',
+  '/pungctual-bg.webp',
 ];
 
 // Pre-cache the small set of always-needed assets on install.
@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
   if (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icon') ||
-    url.pathname === '/mahjong-bg.png' ||
+    url.pathname === '/pungctual-bg.webp' ||
     url.pathname === '/manifest.json'
   ) {
     event.respondWith(cacheFirst(request));

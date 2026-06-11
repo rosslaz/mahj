@@ -46,6 +46,43 @@ standings. Tagline: "Stack the tiles. Settle the score."
   the number elsewhere); footer displays it; feeds the service-worker stamp
   (`scripts/stamp-sw-version.mjs`) so installed PWAs detect updates.
 
+### Setup from scratch (folded in from the old README, which was deleted)
+
+**Supabase project:**
+1. Create a project at supabase.com → SQL Editor → New query.
+2. Fresh install: run `supabase/schema.sql` (it's the full consolidated schema,
+   current through the migration noted in Data model). Upgrading an old v1.x DB:
+   run `supabase/migrations/0010_clubs_and_activities.sql` end-to-end first (it
+   renames leagues→clubs, adds activities, migrates data), then any later migrations.
+3. Authentication → Providers → Email: enable email, **password disabled** (magic
+   link + OTP only).
+4. Authentication → URL Configuration: Site URL = deployed origin; also add
+   `http://localhost:3000` for dev.
+5. Project Settings → API: copy `Project URL` and `anon public` key into env.
+
+**Local dev:** `npm install` → copy `.env.local.example` to `.env.local` and fill the
+two `NEXT_PUBLIC_` vars → `npm run dev`.
+
+**Vercel:** push to GitHub → import at vercel.com/new → add env vars
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus the Stripe/Resend/
+web-push vars) → deploy → update Supabase auth URLs to the deployed origin. (Full
+deploy *ritual* for ongoing changes is under Environment above.)
+
+### Routes
+
+| Path | Purpose |
+|---|---|
+| `/` | Dashboard signed in (next event across clubs, action items, lifetime stats); marketing page signed out |
+| `/sign-in` | Magic-link / OTP sign-in |
+| `/profile` | Global profile |
+| `/clubs`, `/clubs/new`, `/clubs/join` | Club list / create / join-by-code |
+| `/c/[slug]` | Club overview |
+| `/c/[slug]/members` · `/admin` · `/settings` | Roster · manage+create activities · owner-only club mgmt |
+| `/c/[slug]/a/[activitySlug]` | Activity overview (type-aware: standings for scoring types, signup-only for class) |
+| `/c/[slug]/a/[activitySlug]/events` · `/events/[id]` | Event list · single event (signups, host claim, table assignment, scoring) |
+| `/c/[slug]/a/[activitySlug]/leaderboard` | Per-activity standings (league/tournament only) |
+| `/c/[slug]/a/[activitySlug]/settings` | Activity settings (incl. archive/delete) |
+
 ---
 
 ## Brand / design
@@ -79,7 +116,7 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
 - Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
-  baseline + migrations through **0031**). Regenerate it (don't hand-edit) after
+  baseline + migrations through **0032**). Regenerate it (don't hand-edit) after
   applying new migrations, and bump the migration number on this line to match the
   highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →

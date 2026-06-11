@@ -1,6 +1,7 @@
 'use server';
 
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
+import { getServiceSupabase } from '@/lib/supabase-service';
 
 export type NearbyEventType = 'all' | 'league' | 'tournament' | 'class' | 'open_play';
 
@@ -103,7 +104,13 @@ export async function findNearbyEvents(opts: {
     const loc = await getCallerLocation();
     if (!loc.ok) return { ok: false, error: loc.error };
 
-    const supabase = getSupabase();
+    // Service-role client. The events RLS has no "public event" arm, so a
+    // user-session query only returns events from clubs the caller already
+    // belongs to — defeating discovery (and anon was revoked SELECT on events
+    // entirely in 0011). We bypass RLS here and enforce the public/active/
+    // not-deleted/normal-visibility filters explicitly, returning only
+    // redacted fields (no street) to the client.
+    const supabase = getServiceSupabase();
     const today = new Date().toISOString().slice(0, 10);
 
     const { data: rawEvents, error: queryErr } = await supabase
@@ -115,6 +122,7 @@ export async function findNearbyEvents(opts: {
       `)
       .gte('date', today)
       .eq('status', 'active')
+      .eq('visibility', 'normal')
       .is('deleted_at', null)
       .order('date', { ascending: true })
       .order('start_time', { ascending: true })
@@ -206,7 +214,11 @@ export async function findNearbyClubs(opts: {
     const loc = await getCallerLocation();
     if (!loc.ok) return { ok: false, error: loc.error };
 
-    const supabase = getSupabase();
+    // Service-role client. Member counts and event counts for clubs the
+    // caller doesn't belong to are invisible under RLS (cm_select / events
+    // RLS are member-scoped), so they'd all read as zero. We bypass RLS and
+    // return only public clubs with privacy-bucketed counts.
+    const supabase = getServiceSupabase();
 
     // 1. Pull all public, undeleted clubs with a zip. App-side distance
     //    filter (consistent with event discovery approach).
@@ -273,6 +285,7 @@ export async function findNearbyClubs(opts: {
       .gte('date', today)
       .lte('date', inSixtyDays)
       .eq('status', 'active')
+      .eq('visibility', 'normal')
       .is('deleted_at', null);
     const upcomingCounts = new Map<string, number>();
     for (const r of (upcomingRows as any[]) || []) {

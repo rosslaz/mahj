@@ -780,22 +780,26 @@ begin
 end;
 $$;
 
--- Function grants (mirror migration 0027: helpers callable by clients;
--- trigger fns + ownership transfer are service-role only)
+-- Function grants (mirror migrations 0027 + 0032: RLS helpers callable by
+-- clients incl. anon (they run inside policy expressions as the invoking
+-- role); billing helpers authenticated-only; promo claim, trigger fns +
+-- ownership transfer are service-role only)
 grant execute on function public.current_user_id() to anon, authenticated;
 grant execute on function public.is_club_member(uuid, text) to anon, authenticated;
 grant execute on function public.is_public_event(uuid) to anon, authenticated;
 grant execute on function public.can_manage_event(uuid) to anon, authenticated, service_role;
 grant execute on function public.link_auth_to_user() to authenticated;
-grant execute on function public.club_is_pro(uuid) to anon, authenticated, service_role;
-grant execute on function public.club_member_count(uuid) to anon, authenticated, service_role;
-grant execute on function public.club_activity_count(uuid) to anon, authenticated, service_role;
-grant execute on function public.club_admin_count(uuid) to anon, authenticated, service_role;
-grant execute on function public.claim_launch_promo_slot() to authenticated, service_role;
+grant execute on function public.club_is_pro(uuid) to authenticated, service_role;
+grant execute on function public.club_member_count(uuid) to authenticated, service_role;
+grant execute on function public.club_activity_count(uuid) to authenticated, service_role;
+grant execute on function public.club_admin_count(uuid) to authenticated, service_role;
+grant execute on function public.claim_launch_promo_slot() to service_role;
 grant execute on function public.lookup_club_by_join_code(text) to authenticated;
 grant execute on function public.miles_between(double precision, double precision, double precision, double precision) to anon, authenticated;
--- transfer_club_ownership_on_delete + enforce_free_tier_* are service-role only
--- (default grants to anon/authenticated were revoked in migration 0027).
+-- transfer_club_ownership_on_delete + enforce_free_tier_* + the address
+-- trigger fn are service-role/owner only (0027 revoked direct anon/auth
+-- grants; 0032 stripped the leftover PUBLIC grants that transitively
+-- re-included them).
 grant execute on function public.transfer_club_ownership_on_delete(uuid, uuid) to service_role;
 
 -- ============================================================
@@ -881,6 +885,16 @@ drop trigger if exists trg_enforce_free_tier_hidden_event on public.events;
 create trigger trg_enforce_free_tier_hidden_event before insert on public.events
   for each row execute function enforce_free_tier_hidden_event();
 
+-- 0032: same gate on UPDATE, so a free club can't create a normal event and
+-- flip it hidden afterward. WHEN guard = only actual visibility transitions
+-- fire (editing other fields of an existing hidden event is unaffected).
+drop trigger if exists trg_enforce_free_tier_hidden_event_update on public.events;
+create trigger trg_enforce_free_tier_hidden_event_update
+  before update of visibility on public.events
+  for each row
+  when (old.visibility is distinct from new.visibility)
+  execute function enforce_free_tier_hidden_event();
+
 drop trigger if exists trg_enforce_free_tier_member_cap on public.club_members;
 create trigger trg_enforce_free_tier_member_cap before insert on public.club_members
   for each row execute function enforce_free_tier_member_cap();
@@ -920,12 +934,12 @@ revoke select on public.events from anon;
 
 -- users
 create policy users_select on public.users for select to public using (((id = current_user_id()) or (exists ( select 1 from club_members me, club_members them where ((me.user_id = current_user_id()) and (them.user_id = users.id) and (me.club_id = them.club_id))))));
-create policy users_insert on public.users for insert to public with check ((auth_user_id = auth.uid()));
+create policy users_insert on public.users for insert to public with check ((auth_user_id = (select auth.uid())));
 create policy users_update on public.users for update to public using ((id = current_user_id())) with check ((id = current_user_id()));
 
 -- clubs
 create policy clubs_select on public.clubs for select to public using (((owner_user_id = current_user_id()) or ((deleted_at is null) and ((is_public = true) or (exists ( select 1 from club_members where ((club_members.club_id = clubs.id) and (club_members.user_id = current_user_id()))))))));
-create policy clubs_insert on public.clubs for insert to public with check (((auth.uid() is not null) and (owner_user_id = current_user_id())));
+create policy clubs_insert on public.clubs for insert to public with check ((((select auth.uid()) is not null) and (owner_user_id = current_user_id())));
 create policy clubs_update on public.clubs for update to public using (is_club_member(id, 'owner'::text));
 create policy clubs_delete on public.clubs for delete to public using (is_club_member(id, 'owner'::text));
 

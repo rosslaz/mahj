@@ -12,7 +12,13 @@ export const metadata: Metadata = {
   description: 'Run mahjong clubs — leagues, tournaments, classes, open play.',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Pungctual' },
-  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/icon-192.png',
+  },
 };
 
 export const viewport: Viewport = {
