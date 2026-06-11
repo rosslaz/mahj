@@ -644,15 +644,24 @@ as $$
 declare
   v_new_owner uuid;
 begin
-  if not exists (
-    select 1 from clubs
-    where id = p_club_id
-      and owner_user_id = p_leaving_user_id
-      and deleted_at is null
-  ) then
+  -- Guard + lock the clubs row — serializes concurrent transfers for this
+  -- club; a duplicate call blocks, re-evaluates, and returns null
+  -- (migration 0033).
+  perform 1
+  from clubs
+  where id = p_club_id
+    and owner_user_id = p_leaving_user_id
+    and deleted_at is null
+  for update;
+
+  if not found then
     return null;
   end if;
 
+  -- Senior-most admin, with their membership row locked so a concurrent
+  -- demotion/removal must wait for our commit — without the lock the
+  -- promotion below could match 0 rows and leave the club owned by a
+  -- non-member (migration 0033).
   select cm.user_id
   into v_new_owner
   from club_members cm
@@ -660,7 +669,8 @@ begin
     and cm.role = 'admin'
     and cm.user_id <> p_leaving_user_id
   order by cm.joined_at asc nulls last, cm.user_id asc
-  limit 1;
+  limit 1
+  for update;
 
   if v_new_owner is null then
     update clubs set deleted_at = now() where id = p_club_id;
