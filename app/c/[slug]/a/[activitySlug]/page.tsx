@@ -201,9 +201,9 @@ export default function ActivityOverview() {
 
       {/* NEXT EVENT */}
       <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Next Event</div>
         {loading ? (
-          <p className="text-ink/40 italic">Loading…</p>
+          <p className="text-ink/60 italic">Loading…</p>
         ) : nextEvent ? (
           <NextEventCard
             night={nextEvent}
@@ -212,8 +212,8 @@ export default function ActivityOverview() {
           />
         ) : (
           <div className="tile-border p-10 text-center">
-            <p className="font-display italic text-xl text-ink/50 mb-1">Nothing scheduled.</p>
-            <p className="text-sm text-ink/50">
+            <p className="font-display italic text-xl text-ink/65 mb-1">Nothing scheduled.</p>
+            <p className="text-sm text-ink/65">
               {cb.isMember
                 ? <>Head to <Link href={`${eventBasePath}`} className="underline hover:text-cinnabar">Events</Link> to set one up.</>
                 : <>Check back soon.</>}
@@ -227,13 +227,13 @@ export default function ActivityOverview() {
         {hasScoring && (
           <div className="tile-border p-6 flex flex-col">
             <div className="flex items-baseline justify-between mb-4">
-              <div className="font-display italic text-sm text-ink/50">The Standings</div>
-              <Link href={`/c/${clubSlug}/a/${activitySlug}/leaderboard`} className="text-[10px] tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">Full →</Link>
+              <div className="font-display italic text-sm text-ink/65">The Standings</div>
+              <Link href={`/c/${clubSlug}/a/${activitySlug}/leaderboard`} className="text-xs tracking-[0.2em] uppercase text-ink/60 hover:text-cinnabar">Full →</Link>
             </div>
             {loading ? (
-              <p className="text-sm text-ink/40 italic">Loading…</p>
+              <p className="text-sm text-ink/60 italic">Loading…</p>
             ) : topPlayers.length === 0 ? (
-              <p className="text-sm text-ink/40 py-6 text-center italic flex-1">Awaiting first hand</p>
+              <p className="text-sm text-ink/60 py-6 text-center italic flex-1">Awaiting first hand</p>
             ) : (
               <>
                 <ol className="space-y-2.5 flex-1">
@@ -242,8 +242,8 @@ export default function ActivityOverview() {
                     return (
                       <li key={p.user_id} className="flex items-baseline justify-between gap-3">
                         <span className="flex items-baseline gap-2.5 min-w-0">
-                          <span className={`rank-glyph text-xl w-5 ${i === 0 ? 'text-cinnabar' : i < 3 ? 'text-jade' : 'text-ink/40'}`}>{i + 1}</span>
-                          <span className={`truncate ${isMe ? 'font-medium' : ''}`}>{p.name}{isMe && <span className="text-[10px] tracking-[0.2em] uppercase text-cinnabar ml-2">you</span>}</span>
+                          <span className={`rank-glyph text-xl w-5 ${i === 0 ? 'text-cinnabar' : i < 3 ? 'text-jade' : 'text-ink/60'}`}>{i + 1}</span>
+                          <span className={`truncate ${isMe ? 'font-medium' : ''}`}>{p.name}{isMe && <span className="text-xs tracking-[0.2em] uppercase text-cinnabar ml-2">you</span>}</span>
                         </span>
                         <span className="font-display text-base">{p.total_points}</span>
                       </li>
@@ -253,8 +253,8 @@ export default function ActivityOverview() {
                 {myRank && (
                   <div className="mt-3 pt-3 border-t border-ink/10 flex items-baseline justify-between gap-3 text-ink/60">
                     <span className="flex items-baseline gap-2.5 min-w-0">
-                      <span className="rank-glyph text-xl w-5 text-ink/40">{myRank.rank}</span>
-                      <span className="truncate font-medium">{myRank.row.name}<span className="text-[10px] tracking-[0.2em] uppercase text-cinnabar ml-2">you</span></span>
+                      <span className="rank-glyph text-xl w-5 text-ink/60">{myRank.rank}</span>
+                      <span className="truncate font-medium">{myRank.row.name}<span className="text-xs tracking-[0.2em] uppercase text-cinnabar ml-2">you</span></span>
                     </span>
                     <span className="font-display text-base">{myRank.row.total_points}</span>
                   </div>
@@ -267,24 +267,24 @@ export default function ActivityOverview() {
         {hasScoring && (
           <div className="tile-border p-6 flex flex-col">
             <div className="flex items-baseline justify-between mb-4">
-              <div className="font-display italic text-sm text-ink/50">Recent Winners</div>
-              <Link href={eventBasePath} className="text-[10px] tracking-[0.2em] uppercase text-ink/40 hover:text-cinnabar">All →</Link>
+              <div className="font-display italic text-sm text-ink/65">Recent Winners</div>
+              <Link href={eventBasePath} className="text-xs tracking-[0.2em] uppercase text-ink/60 hover:text-cinnabar">All →</Link>
             </div>
             {loading ? (
-              <p className="text-sm text-ink/40 italic">Loading…</p>
+              <p className="text-sm text-ink/60 italic">Loading…</p>
             ) : recentResults.length === 0 ? (
-              <p className="text-sm text-ink/40 py-6 text-center italic flex-1">No results yet</p>
+              <p className="text-sm text-ink/60 py-6 text-center italic flex-1">No results yet</p>
             ) : (
               <ul className="space-y-3 flex-1">
                 {recentResults.map((r) => (
                   <li key={r.event_id}>
                     <Link href={`${eventBasePath}/${r.event_id}`} className="block hover:text-cinnabar group">
-                      <div className="text-[10px] tracking-[0.2em] uppercase text-ink/40 mb-0.5">
+                      <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-0.5">
                         {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {r.name}
                       </div>
                       <div className="text-base">
                         <strong className="font-display text-lg">{r.winner_name}</strong>
-                        <span className="text-ink/50 ml-2">with {r.winner_points} pts</span>
+                        <span className="text-ink/65 ml-2">with {r.winner_points} pts</span>
                       </div>
                     </Link>
                   </li>
@@ -296,18 +296,18 @@ export default function ActivityOverview() {
 
         <div className="tile-border p-6 flex flex-col">
           <div className="flex items-baseline justify-between mb-4">
-            <div className="font-display italic text-sm text-ink/50">Activity</div>
+            <div className="font-display italic text-sm text-ink/65">Activity</div>
           </div>
           {loading ? (
-            <p className="text-sm text-ink/40 italic">Loading…</p>
+            <p className="text-sm text-ink/60 italic">Loading…</p>
           ) : (
             <div className="space-y-4 flex-1">
               <div>
-                <div className="text-[10px] tracking-[0.2em] uppercase text-ink/40 mb-1">{ACTIVITY_TYPE_LABEL[act.activity.type]}</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">{ACTIVITY_TYPE_LABEL[act.activity.type]}</div>
                 <div className="font-display text-2xl">{act.activity.name}</div>
               </div>
               <div>
-                <div className="text-[10px] tracking-[0.2em] uppercase text-ink/40 mb-1">
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">
                   {act.activity.type === 'class' ? 'Sessions' :
                    act.activity.type === 'open_play' ? 'Sessions' : 'Events'}
                 </div>
@@ -315,10 +315,10 @@ export default function ActivityOverview() {
               </div>
               {nextEvent && (
                 <div>
-                  <div className="text-[10px] tracking-[0.2em] uppercase text-ink/40 mb-1">Signed Up for Next</div>
+                  <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">Signed Up for Next</div>
                   <div className="font-display text-3xl">
                     {nextEventSignupCount}
-                    <span className="text-base text-ink/40">/{(nextEvent.num_tables ?? 0) * 5}</span>
+                    <span className="text-base text-ink/60">/{(nextEvent.num_tables ?? 0) * 5}</span>
                   </div>
                 </div>
               )}

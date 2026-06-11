@@ -242,7 +242,7 @@ export default function SignInPage() {
                 required
               />
               {mode === 'create_account' && (
-                <p className="mt-2 text-xs text-ink/40 italic">
+                <p className="mt-2 text-xs text-ink/60 italic">
                   We&apos;ll create your account when you confirm your email.
                 </p>
               )}
@@ -306,7 +306,7 @@ export default function SignInPage() {
                     </span>
                   </label>
                 )}
-                <p className="text-[11px] text-ink/40 italic pt-1">
+                <p className="text-xs text-ink/60 italic pt-1">
                   You must be at least 13 years old to use Pungctual.
                 </p>
               </div>
@@ -331,7 +331,7 @@ export default function SignInPage() {
           </form>
 
           {/* Cross-tab nudge for users who tap the wrong one */}
-          <p className="text-xs text-ink/40 italic text-center">
+          <p className="text-xs text-ink/60 italic text-center">
             {mode === 'sign_in' ? (
               <>New here?{' '}
                 <button
@@ -393,7 +393,7 @@ export default function SignInPage() {
             >
               {verifying ? 'Verifying…' : 'Verify & Sign In'}
             </button>
-            <p className="text-xs text-ink/40 italic">
+            <p className="text-xs text-ink/60 italic">
               Check spam if it doesn't arrive within a minute. The code expires after about an hour.
             </p>
           </form>
@@ -406,7 +406,7 @@ export default function SignInPage() {
               <button
                 type="button"
                 onClick={() => setShowLinkInfoInPwa(true)}
-                className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                className="text-xs tracking-[0.15em] uppercase text-ink/60 hover:text-cinnabar"
               >
                 Prefer the link?
               </button>
@@ -418,7 +418,7 @@ export default function SignInPage() {
                   <p>
                     Your email also includes a magic link. On this device it may open in your default browser rather than this app — signing you in there instead of here.
                   </p>
-                  <p className="text-xs text-ink/40 italic">
+                  <p className="text-xs text-ink/60 italic">
                     Typing the code keeps you signed in within Pungctual.
                   </p>
                 </>
@@ -427,7 +427,7 @@ export default function SignInPage() {
                   <p>
                     Your email also includes a magic link. Click it <strong>in this same browser</strong> and you'll be signed in — no code needed.
                   </p>
-                  <p className="text-xs text-ink/40 italic">
+                  <p className="text-xs text-ink/60 italic">
                     Same email either way. Use whichever is easiest.
                   </p>
                 </>
@@ -439,7 +439,7 @@ export default function SignInPage() {
             <button
               type="button"
               onClick={resetToEmailEntry}
-              className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+              className="text-xs tracking-[0.15em] uppercase text-ink/60 hover:text-cinnabar"
             >
               ← Use a different email
             </button>

@@ -58,9 +58,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="max-w-6xl mx-auto px-6 py-10">{children}</main>
-        <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/40 tracking-[0.2em] uppercase text-center space-y-3">
+        <footer className="max-w-6xl mx-auto px-6 py-10 mt-10 border-t border-ink/10 text-xs text-ink/60 tracking-[0.2em] uppercase text-center space-y-3">
           <div>Four winds · Three dragons · One Pungctual</div>
-          <div className="space-x-4 normal-case tracking-[0.15em] text-[11px]">
+          <div className="space-x-4 normal-case tracking-[0.15em] text-xs">
             <a href="mailto:support@pungctual.com" className="hover:text-cinnabar">Contact</a>
             <span className="text-ink/20">·</span>
             <Link href="/terms" className="hover:text-cinnabar">Terms</Link>
@@ -70,7 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/acceptable-use" className="hover:text-cinnabar">Acceptable Use</Link>
           </div>
           {process.env.NEXT_PUBLIC_APP_VERSION && (
-            <div className="text-[10px] text-ink/30 tracking-[0.25em] normal-case">
+            <div className="text-xs text-ink/50 tracking-[0.25em] normal-case">
               v{process.env.NEXT_PUBLIC_APP_VERSION}
             </div>
           )}

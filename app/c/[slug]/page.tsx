@@ -195,9 +195,9 @@ export default function ClubOverview() {
 
       {/* NEXT EVENT across club */}
       <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Next Event</div>
         {loading ? (
-          <p className="text-ink/40 italic">Loading…</p>
+          <p className="text-ink/60 italic">Loading…</p>
         ) : nextEvent ? (
           <NextEventCard
             slug={`${slug}/a/${nextEvent.activity_slug}`}
@@ -208,9 +208,9 @@ export default function ClubOverview() {
           />
         ) : (
           <div className="tile-border p-10 text-center">
-            <p className="font-display italic text-xl text-ink/50 mb-1">Nothing scheduled.</p>
+            <p className="font-display italic text-xl text-ink/65 mb-1">Nothing scheduled.</p>
             {cb.isAdmin && activities.length === 0 && (
-              <p className="text-sm text-ink/50 mt-2">
+              <p className="text-sm text-ink/65 mt-2">
                 Start by adding an activity below.
               </p>
             )}
@@ -221,7 +221,7 @@ export default function ClubOverview() {
       {/* ACTIVITIES */}
       <section>
         <div className="flex items-baseline justify-between mb-3">
-          <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Activities</div>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60">Activities</div>
           {cb.isAdmin && activities.length > 0 && (
             <Link
               href={`/c/${slug}/a/new`}
@@ -232,11 +232,11 @@ export default function ClubOverview() {
           )}
         </div>
         {loading ? (
-          <p className="text-ink/40 italic">Loading…</p>
+          <p className="text-ink/60 italic">Loading…</p>
         ) : activities.length === 0 ? (
           <div className="tile-border p-10 text-center">
-            <p className="font-display italic text-xl text-ink/50 mb-1">No activities yet.</p>
-            <p className="text-sm text-ink/50 mb-4">
+            <p className="font-display italic text-xl text-ink/65 mb-1">No activities yet.</p>
+            <p className="text-sm text-ink/65 mb-4">
               {cb.isAdmin
                 ? <>Add your first activity — a league, tournament, class, or open play session.</>
                 : <>The club owner hasn't set up any activities yet.</>}
@@ -255,9 +255,9 @@ export default function ClubOverview() {
                 style={{ animationDelay: `${i * 0.04}s` }}
               >
                 <div className="flex items-baseline justify-between mb-2 gap-2">
-                  <span className="text-[10px] tracking-[0.25em] uppercase text-jade">{ACTIVITY_TYPE_LABEL[a.type]}</span>
+                  <span className="text-xs tracking-[0.25em] uppercase text-jade">{ACTIVITY_TYPE_LABEL[a.type]}</span>
                   {a.is_public && (
-                    <span className="text-[10px] tracking-[0.25em] uppercase text-ink/40">Public</span>
+                    <span className="text-xs tracking-[0.25em] uppercase text-ink/60">Public</span>
                   )}
                 </div>
                 <div className="font-display text-2xl mb-1">{a.name}</div>
@@ -271,11 +271,11 @@ export default function ClubOverview() {
       {/* Quick stat */}
       <section className="grid grid-cols-2 gap-px bg-ink/15 border border-ink/15">
         <div className="bg-bone p-6">
-          <div className="text-[10px] tracking-[0.2em] uppercase text-ink/40 mb-1">Members</div>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">Members</div>
           <div className="font-display text-3xl">{memberCount}</div>
         </div>
         <div className="bg-bone p-6">
-          <div className="text-[10px] tracking-[0.2em] uppercase text-ink/40 mb-1">Activities</div>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">Activities</div>
           <div className="font-display text-3xl">{activities.length}</div>
         </div>
       </section>
@@ -314,7 +314,7 @@ function SubscriptionBadge({
       (new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
     ));
     return (
-      <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase">
+      <span className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase">
         <span className="px-2 py-0.5 border border-bamboo/40 bg-bamboo/10 text-bamboo">
           Pro Trial · {daysLeft}d
         </span>
@@ -329,7 +329,7 @@ function SubscriptionBadge({
 
   if (status === 'active' || isTrialingPost || status === 'past_due') {
     return (
-      <span className="text-[10px] tracking-[0.2em] uppercase px-2 py-0.5 border border-jade/40 bg-jade/10 text-jade">
+      <span className="text-xs tracking-[0.2em] uppercase px-2 py-0.5 border border-jade/40 bg-jade/10 text-jade">
         Pro
       </span>
     );
@@ -337,7 +337,7 @@ function SubscriptionBadge({
 
   if (status === 'grandfathered') {
     return (
-      <span className="text-[10px] tracking-[0.2em] uppercase px-2 py-0.5 border border-gold/40 bg-gold/10 text-gold">
+      <span className="text-xs tracking-[0.2em] uppercase px-2 py-0.5 border border-gold/40 bg-gold/10 text-gold">
         Pro · Lifetime
       </span>
     );
@@ -345,7 +345,7 @@ function SubscriptionBadge({
 
   if (status === 'canceled') {
     return (
-      <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase">
+      <span className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase">
         <span className="px-2 py-0.5 border border-cinnabar/40 bg-cinnabar/10 text-cinnabar">
           Canceled
         </span>
@@ -360,8 +360,8 @@ function SubscriptionBadge({
 
   // Free
   return (
-    <span className="inline-flex items-center gap-2 text-[10px] tracking-[0.2em] uppercase">
-      <span className="px-2 py-0.5 border border-ink/15 text-ink/50">Free</span>
+    <span className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase">
+      <span className="px-2 py-0.5 border border-ink/15 text-ink/65">Free</span>
       {isOwner && (
         <Link href={`/c/${slug}/billing`} className="text-jade hover:underline">
           Upgrade

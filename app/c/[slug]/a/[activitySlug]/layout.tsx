@@ -14,7 +14,7 @@ export default function ActivityLayout({ children }: { children: React.ReactNode
   const act = useActivity(cb.club?.id, activitySlug);
 
   if (cb.loading || act.loading) {
-    return <p className="text-ink/40 italic">Loading…</p>;
+    return <p className="text-ink/60 italic">Loading…</p>;
   }
   if (act.notFound) {
     return (
@@ -64,12 +64,12 @@ export default function ActivityLayout({ children }: { children: React.ReactNode
       <div className="border-b border-ink/10 pb-4 -mt-4">
         {/* Full path breadcrumb: My Clubs / Lazar / Tuesday League */}
         <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap">
-          <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+          <Link href="/clubs" className="text-ink/60 hover:text-cinnabar transition-colors">My Clubs</Link>
           <span className="text-ink/20">/</span>
-          <Link href={`/c/${clubSlug}`} className="text-ink/40 hover:text-cinnabar transition-colors">{cb.club?.name}</Link>
+          <Link href={`/c/${clubSlug}`} className="text-ink/60 hover:text-cinnabar transition-colors">{cb.club?.name}</Link>
           <span className="text-ink/20">/</span>
           <span className="text-ink/80">{act.activity.name}</span>
-          <span className="ml-2 text-[10px] tracking-[0.25em] uppercase text-ink/40">
+          <span className="ml-2 text-xs tracking-[0.25em] uppercase text-ink/60">
             {ACTIVITY_TYPE_LABEL[act.activity.type]}
           </span>
         </nav>

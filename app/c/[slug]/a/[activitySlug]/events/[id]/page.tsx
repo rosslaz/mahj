@@ -251,8 +251,8 @@ function EventDetailPageInner() {
   // constant during a live night) keep the stale page rendered and swap the
   // data in place instead of blanking to "Loading…" and resetting scroll
   // (UX audit U-3).
-  if (loading && !night) return <p className="text-ink/40 italic">Loading game night…</p>;
-  if (!night) return <p className="text-ink/40 italic">Game night not found.</p>;
+  if (loading && !night) return <p className="text-ink/60 italic">Loading game night…</p>;
+  if (!night) return <p className="text-ink/60 italic">Game night not found.</p>;
 
   const isHost = !!auth.userId && night.host_player_id === auth.userId;
   const canManage = isHost || cb.isAdmin;
@@ -737,7 +737,7 @@ function EventDetailPageInner() {
               <div className="text-sm">
                 {addressLines.map((line, idx) => <div key={idx}>{line}</div>)}
                 {streetIsHidden && (
-                  <div className="text-xs italic text-ink/40 mt-1">
+                  <div className="text-xs italic text-ink/60 mt-1">
                     Street address shown after the host approves your signup.
                   </div>
                 )}
@@ -745,7 +745,7 @@ function EventDetailPageInner() {
             )}
             <div className="text-sm">
               {night.num_tables} table{night.num_tables === 1 ? '' : 's'} · {night.games_planned} games each ·{' '}
-              <span className={night.status === 'active' ? 'text-jade' : 'text-ink/40'}>{night.status}</span>
+              <span className={night.status === 'active' ? 'text-jade' : 'text-ink/60'}>{night.status}</span>
             </div>
           </div>
         </div>
@@ -803,7 +803,7 @@ function EventDetailPageInner() {
         <div className="flex items-baseline justify-between mb-5 flex-wrap gap-3">
           <div>
             <h2 className="font-display text-3xl">Signed Up</h2>
-            <p className="text-sm text-ink/50 italic mt-1">
+            <p className="text-sm text-ink/65 italic mt-1">
               {approvedCount} / {capacityMax} · need {capacityMin} to play
               {pendingSignups.length > 0 && (
                 <> · <span className="text-cinnabar">{pendingSignups.length} pending approval</span></>
@@ -862,7 +862,7 @@ function EventDetailPageInner() {
                   <li key={s.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
                     <span className="text-sm">
                       <span className="font-medium">{member?.name || `User ${s.player_id.slice(0, 8)}`}</span>
-                      {!member && <span className="text-ink/40 ml-2 text-xs italic">not a club member</span>}
+                      {!member && <span className="text-ink/60 ml-2 text-xs italic">not a club member</span>}
                     </span>
                     <span className="flex gap-2 items-center">
                       <button
@@ -877,7 +877,7 @@ function EventDetailPageInner() {
                         render={(arm) => (
                           <button
                             onClick={arm}
-                            className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                            className="text-xs tracking-[0.15em] uppercase text-cinnabar/80 hover:text-cinnabar py-2.5 -my-2.5 px-1.5 -mx-1.5"
                           >
                             Decline
                           </button>
@@ -892,7 +892,7 @@ function EventDetailPageInner() {
         )}
 
         {approvedSignups.length === 0 ? (
-          <p className="text-ink/40 italic">No one's signed up yet.</p>
+          <p className="text-ink/60 italic">No one's signed up yet.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {approvedSignups.map((s) => {
@@ -913,7 +913,7 @@ function EventDetailPageInner() {
                       render={(arm) => (
                         <button
                           onClick={arm}
-                          className="text-ink/30 hover:text-cinnabar text-xs"
+                          className="text-ink/50 hover:text-cinnabar text-xs p-2 -m-2"
                           title="Remove"
                         >
                           ×
@@ -936,7 +936,7 @@ function EventDetailPageInner() {
             >
               {isAssigned ? 'Re-assign Tables' : 'Assign Tables'}
             </button>
-            <p className="text-xs text-ink/50 italic">
+            <p className="text-xs text-ink/65 italic">
               {approvedCount < capacityMin
                 ? `${capacityMin - approvedCount} more player${capacityMin - approvedCount === 1 ? '' : 's'} needed.`
                 : approvedCount > capacityMax
@@ -946,7 +946,7 @@ function EventDetailPageInner() {
                     Seating balances sit-outs over the season.{' '}
                     <details className="inline">
                       <summary className="inline cursor-pointer text-ink/60 hover:text-ink underline">How does this work?</summary>
-                      <span className="block mt-1 not-italic text-ink/50">
+                      <span className="block mt-1 not-italic text-ink/65">
                         Players who have sat out the least land at 5-player tables, and within those,
                         the least-sat are seated to sit out games 1{night.games_planned >= 2 ? `–${Math.min(night.games_planned, 5)}` : ''}.
                       </span>
@@ -968,7 +968,7 @@ function EventDetailPageInner() {
           <div className="flex items-baseline justify-between mb-5 flex-wrap gap-3">
             <div>
               <h2 className="font-display text-3xl">Invitations</h2>
-              <p className="text-sm text-ink/50 italic mt-1">
+              <p className="text-sm text-ink/65 italic mt-1">
                 {pendingInvitesList.length} pending · {acceptedInvitesList.length} accepted
                 {declinedInvitesList.length > 0 && <> · {declinedInvitesList.length} declined</>}
               </p>
@@ -986,7 +986,7 @@ function EventDetailPageInner() {
             <div className="border border-ink/15 p-4 mb-5 space-y-4 bg-bone">
               <div>
                 <label className="label">Invite club members</label>
-                <p className="text-xs text-ink/40 italic mb-2">
+                <p className="text-xs text-ink/60 italic mb-2">
                   {addInviteMemberIds.size === 0
                     ? 'Select members not yet invited.'
                     : `${addInviteMemberIds.size} selected`}
@@ -998,7 +998,7 @@ function EventDetailPageInner() {
                     !alreadyInvitedIds.has(m.user_id) && !approvedIds.has(m.user_id)
                   );
                   if (eligibleMembers.length === 0) {
-                    return <p className="text-xs text-ink/50 italic">All club members are already invited or signed up.</p>;
+                    return <p className="text-xs text-ink/65 italic">All club members are already invited or signed up.</p>;
                   }
                   return (
                     <div className="max-h-48 overflow-y-auto border border-ink/15 p-2 space-y-1">
@@ -1027,9 +1027,9 @@ function EventDetailPageInner() {
 
               <div>
                 <label className="label flex items-center gap-2">
-                  Outside guests <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                  Outside guests <span className="text-ink/50 normal-case tracking-normal italic font-normal">— optional</span>
                   {isPro === false && (
-                    <span className="text-[9px] tracking-[0.2em] uppercase px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar font-normal">
+                    <span className="text-[11px] tracking-[0.2em] uppercase px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar font-normal">
                       Pro
                     </span>
                   )}
@@ -1050,7 +1050,7 @@ function EventDetailPageInner() {
                       onChange={(e) => setAddInviteEmails(e.target.value)}
                       placeholder="sarah@example.com&#10;tom@example.com"
                     />
-                    <p className="text-xs text-ink/40 italic mt-1">
+                    <p className="text-xs text-ink/60 italic mt-1">
                       Email addresses, one per line. They&apos;ll join the club + event in one click.
                     </p>
                   </>
@@ -1059,7 +1059,7 @@ function EventDetailPageInner() {
 
               <div>
                 <label className="label">
-                  Welcome message <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                  Welcome message <span className="text-ink/50 normal-case tracking-normal italic font-normal">— optional</span>
                 </label>
                 <textarea
                   className="input min-h-[50px]"
@@ -1095,7 +1095,7 @@ function EventDetailPageInner() {
 
           {/* List of current invitations */}
           {eventInvites.length === 0 ? (
-            <p className="text-sm text-ink/50 italic">No invitations sent yet.</p>
+            <p className="text-sm text-ink/65 italic">No invitations sent yet.</p>
           ) : (
             <div className="space-y-1">
               {/* Pending first */}
@@ -1103,7 +1103,7 @@ function EventDetailPageInner() {
                 <div key={inv.id} className="flex items-center justify-between gap-3 py-2 px-3 border-b border-ink/5 last:border-0">
                   <div className="min-w-0">
                     <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
-                    <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar">Pending</span>
+                    <span className="ml-2 text-xs tracking-[0.15em] uppercase px-2 py-0.5 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar">Pending</span>
                   </div>
                   <InlineConfirm
                     confirmLabel="Cancel invitation"
@@ -1111,7 +1111,7 @@ function EventDetailPageInner() {
                     render={(arm) => (
                       <button
                         onClick={arm}
-                        className="text-xs text-ink/50 hover:text-cinnabar"
+                        className="text-xs text-ink/65 hover:text-cinnabar"
                       >
                         Cancel
                       </button>
@@ -1124,7 +1124,7 @@ function EventDetailPageInner() {
                 <div key={inv.id} className="flex items-center justify-between gap-3 py-2 px-3 border-b border-ink/5 last:border-0">
                   <div className="min-w-0">
                     <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
-                    <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border bg-jade/10 border-jade/40 text-jade">Accepted</span>
+                    <span className="ml-2 text-xs tracking-[0.15em] uppercase px-2 py-0.5 border bg-jade/10 border-jade/40 text-jade">Accepted</span>
                   </div>
                 </div>
               ))}
@@ -1133,7 +1133,7 @@ function EventDetailPageInner() {
                 <div key={inv.id} className="flex items-center justify-between gap-3 py-2 px-3 border-b border-ink/5 last:border-0 opacity-60">
                   <div className="min-w-0">
                     <span className="text-sm">{inv.invitee_name || '(name unavailable)'}</span>
-                    <span className="ml-2 text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border border-ink/20 text-ink/50">Declined</span>
+                    <span className="ml-2 text-xs tracking-[0.15em] uppercase px-2 py-0.5 border border-ink/20 text-ink/65">Declined</span>
                   </div>
                 </div>
               ))}
@@ -1274,22 +1274,22 @@ function TableSection({
     <section className="tile-border p-6 md:p-8">
       <div className="flex items-baseline justify-between mb-6 flex-wrap gap-2">
         <h2 className="font-display text-3xl">Table <em className="text-jade">{table.table_number}</em></h2>
-        <span className="text-xs tracking-[0.2em] uppercase text-ink/40">{seats.length} seated</span>
+        <span className="text-xs tracking-[0.2em] uppercase text-ink/60">{seats.length} seated</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-7">
         {playerTotals.map((p) => (
           <div key={p.seat.id} className="border border-ink/10 bg-bone/50 p-3 text-center relative group">
-            <div className="text-[10px] tracking-[0.2em] uppercase text-cinnabar mb-1">
+            <div className="text-xs tracking-[0.2em] uppercase text-cinnabar mb-1">
               {p.seat.wind ? WIND_LABEL[p.seat.wind] : 'Sit-out (G1)'}
             </div>
             <div className="text-xs tracking-[0.15em] uppercase text-ink/60 truncate">{p.member?.name || '—'}</div>
             <div className="font-display text-3xl mt-1">{p.pts}</div>
-            <div className="text-[10px] tracking-[0.15em] uppercase text-jade mt-1">{p.wins} win{p.wins === 1 ? '' : 's'}</div>
+            <div className="text-xs tracking-[0.15em] uppercase text-jade mt-1">{p.wins} win{p.wins === 1 ? '' : 's'}</div>
             {canManage && (
               <button
                 onClick={() => onSwapSeat(p.seat.id)}
-                className="absolute top-1 right-1 text-[10px] tracking-[0.15em] uppercase text-ink/30 hover:text-cinnabar opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 text-xs tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar opacity-70 group-hover:opacity-100 transition-opacity p-1.5 -m-1.5"
                 title="Swap player"
               >
                 swap
@@ -1300,7 +1300,7 @@ function TableSection({
       </div>
 
       <div>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Games</div>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Games</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {games.map((g) => {
             const completed = g.status === 'completed';
@@ -1323,23 +1323,23 @@ function TableSection({
                       : 'bg-bone border-ink/15 hover:border-ink'
                 }`}
               >
-                <div className="text-[10px] tracking-[0.2em] uppercase text-ink/50">Game {g.game_number}</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/65">Game {g.game_number}</div>
                 {isWall ? (
                   <div className="mt-1 text-sm font-medium font-display italic text-cinnabar">The Wall</div>
                 ) : completed && winnerName ? (
                   <>
                     <div className="mt-1 text-sm font-medium truncate">{winnerName} ✓</div>
                     {winner && winner.points > 0 && (
-                      <div className="text-[10px] text-ink/50">{winner.points} pts</div>
+                      <div className="text-xs text-ink/65">{winner.points} pts</div>
                     )}
                   </>
                 ) : completed ? (
-                  <div className="mt-1 text-sm italic text-ink/50">scored</div>
+                  <div className="mt-1 text-sm italic text-ink/65">scored</div>
                 ) : (
-                  <div className="mt-1 text-sm italic text-ink/40">enter</div>
+                  <div className="mt-1 text-sm italic text-ink/60">enter</div>
                 )}
                 {sitOutMember && (
-                  <div className="text-[10px] text-ink/40 mt-1 truncate">out: {sitOutMember.name}</div>
+                  <div className="text-xs text-ink/60 mt-1 truncate">out: {sitOutMember.name}</div>
                 )}
               </button>
             );
@@ -1361,12 +1361,12 @@ function AddPlayerModal({
       <div className="bg-bone tile-border w-full max-w-md p-7 max-h-[80vh] flex flex-col">
         <div className="flex items-baseline justify-between mb-4">
           <h3 className="font-display text-2xl">Add Player</h3>
-          <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
+          <button onClick={onClose} className="p-3 -m-3 text-ink/60 hover:text-cinnabar text-2xl leading-none">×</button>
         </div>
         <input type="search" className="input mb-4" placeholder="Search…" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="text-ink/40 italic text-sm">No members to add.</p>
+            <p className="text-ink/60 italic text-sm">No members to add.</p>
           ) : (
             <ul className="divide-y divide-ink/10">
               {filtered.map((m) => (
@@ -1401,7 +1401,7 @@ function SwapPlayerModal({
       <div className="bg-bone tile-border w-full max-w-md p-7 max-h-[80vh] flex flex-col">
         <div className="flex items-baseline justify-between mb-4">
           <h3 className="font-display text-2xl">Swap Player</h3>
-          <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
+          <button onClick={onClose} className="p-3 -m-3 text-ink/60 hover:text-cinnabar text-2xl leading-none">×</button>
         </div>
         <p className="text-sm text-ink/60 mb-4">
           Replace <strong>{currentMember?.name}</strong> with another player. Wind and remaining games transfer over. Completed games keep the original scorer.
@@ -1409,7 +1409,7 @@ function SwapPlayerModal({
         <input type="search" className="input mb-4" placeholder="Search…" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
         <div className="flex-1 overflow-y-auto">
           {candidates.length === 0 ? (
-            <p className="text-ink/40 italic text-sm">No eligible players. All others are already seated.</p>
+            <p className="text-ink/60 italic text-sm">No eligible players. All others are already seated.</p>
           ) : (
             <ul className="divide-y divide-ink/10">
               {candidates.map((m) => (
@@ -1531,7 +1531,7 @@ function ScoreEntryModal({
       <div className="bg-bone tile-border w-full max-w-lg pt-7 px-7 pb-0 max-h-[90vh] overflow-y-auto">
         <div className="flex items-baseline justify-between mb-2">
           <h3 className="font-display text-3xl">Game Result</h3>
-          <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
+          <button onClick={onClose} className="p-3 -m-3 text-ink/60 hover:text-cinnabar text-2xl leading-none">×</button>
         </div>
 
         {sitOut && (
@@ -1540,7 +1540,7 @@ function ScoreEntryModal({
           </p>
         )}
 
-        <p className="text-sm text-ink/50 italic mb-2">How did this hand end?</p>
+        <p className="text-sm text-ink/65 italic mb-2">How did this hand end?</p>
         {hasExistingCompleted && (
           <p className="text-xs text-jade mb-6 not-italic">Editing a saved result — changes overwrite what's recorded.</p>
         )}
@@ -1558,7 +1558,7 @@ function ScoreEntryModal({
             }`}
           >
             <div className="font-display text-xl">A Winner</div>
-            <div className="text-xs text-ink/50 italic mt-1">One player took the hand</div>
+            <div className="text-xs text-ink/65 italic mt-1">One player took the hand</div>
           </button>
           <button
             type="button"
@@ -1570,7 +1570,7 @@ function ScoreEntryModal({
             }`}
           >
             <div className="font-display text-xl">The Wall</div>
-            <div className="text-xs text-ink/50 italic mt-1">Tiles ran out — no winner</div>
+            <div className="text-xs text-ink/65 italic mt-1">Tiles ran out — no winner</div>
           </button>
         </div>
 
@@ -1592,7 +1592,7 @@ function ScoreEntryModal({
                     }`}
                   >
                     <div className="font-medium truncate">{member?.name}</div>
-                    <div className="text-[10px] tracking-[0.2em] uppercase text-cinnabar">
+                    <div className="text-xs tracking-[0.2em] uppercase text-cinnabar">
                       {gpw?.wind && WIND_LABEL[gpw.wind]}
                     </div>
                   </button>
@@ -1611,7 +1611,7 @@ function ScoreEntryModal({
                 onChange={(e) => setPointsStr(e.target.value)}
                 placeholder="0"
               />
-              <p className="text-xs text-ink/40 italic mt-1">Only the winner scores. No negatives.</p>
+              <p className="text-xs text-ink/60 italic mt-1">Only the winner scores. No negatives.</p>
             </div>
           </div>
         )}
@@ -1634,7 +1634,7 @@ function ScoreEntryModal({
           </button>
           <button onClick={onClose} className="btn btn-ghost">Cancel</button>
           {hasExistingCompleted && (
-            <button onClick={clearAndClose} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar ml-auto self-center">
+            <button onClick={clearAndClose} className="text-xs tracking-[0.15em] uppercase text-cinnabar/80 hover:text-cinnabar py-3 -my-3 px-2 -mx-2 ml-auto self-center">
               Clear
             </button>
           )}
@@ -1728,34 +1728,34 @@ function CalendarInviteModal({
       <div className="bg-bone tile-border w-full max-w-xl p-7 max-h-[90vh] overflow-y-auto">
         <div className="flex items-baseline justify-between mb-2">
           <h3 className="font-display text-3xl">Calendar Invites</h3>
-          <button onClick={onClose} className="text-ink/40 hover:text-cinnabar text-2xl leading-none">×</button>
+          <button onClick={onClose} className="p-3 -m-3 text-ink/60 hover:text-cinnabar text-2xl leading-none">×</button>
         </div>
-        <p className="text-sm text-ink/50 italic mb-6">
+        <p className="text-sm text-ink/65 italic mb-6">
           Send an email + .ics file to approved players for <em>{eventName}</em>.
         </p>
 
         {/* Recipient status summary */}
         <div className="border-b border-ink/10 pb-4 mb-5 grid grid-cols-2 gap-3 text-sm">
           <div>
-            <div className="text-xs tracking-[0.15em] uppercase text-ink/40 mb-1">Approved players</div>
+            <div className="text-xs tracking-[0.15em] uppercase text-ink/60 mb-1">Approved players</div>
             <div className="font-display text-2xl">{recipients.length}</div>
           </div>
           <div>
-            <div className="text-xs tracking-[0.15em] uppercase text-ink/40 mb-1">Not yet invited</div>
+            <div className="text-xs tracking-[0.15em] uppercase text-ink/60 mb-1">Not yet invited</div>
             <div className={`font-display text-2xl ${remaining.length > 0 ? 'text-cinnabar' : ''}`}>{remaining.length}</div>
           </div>
         </div>
 
         {alreadyInvited.length > 0 && (
           <details className="mb-4 text-sm">
-            <summary className="text-xs tracking-[0.2em] uppercase text-ink/40 cursor-pointer hover:text-ink">
+            <summary className="text-xs tracking-[0.2em] uppercase text-ink/60 cursor-pointer hover:text-ink">
               {alreadyInvited.length} already invited
             </summary>
             <ul className="mt-2 pl-4 text-ink/60 space-y-0.5">
               {alreadyInvited.map((r) => (
                 <li key={r.signupId} className="flex items-baseline justify-between gap-3">
                   <span>{r.name}</span>
-                  <span className="text-[10px] tracking-[0.15em] uppercase text-ink/40">
+                  <span className="text-xs tracking-[0.15em] uppercase text-ink/60">
                     {new Date(r.invitedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </li>
@@ -1793,7 +1793,7 @@ function CalendarInviteModal({
         )}
 
         <div className="mb-5">
-          <label className="label">Optional message <span className="text-ink/30 normal-case tracking-normal italic font-normal">— shown in the email body</span></label>
+          <label className="label">Optional message <span className="text-ink/50 normal-case tracking-normal italic font-normal">— shown in the email body</span></label>
           <textarea
             className="input min-h-[80px] resize-y"
             value={customMessage}
@@ -1828,12 +1828,12 @@ function CalendarInviteModal({
           >
             Download .ics
           </a>
-          <button onClick={onClose} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar ml-auto">
+          <button onClick={onClose} className="text-xs tracking-[0.15em] uppercase text-ink/60 hover:text-cinnabar py-3 -my-3 px-2 -mx-2 ml-auto">
             Close
           </button>
         </div>
 
-        <p className="text-xs text-ink/40 italic mt-4 leading-snug">
+        <p className="text-xs text-ink/60 italic mt-4 leading-snug">
           Recipients will get an email with a calendar invite attached. Replies route directly to the host. Resending updates each recipient's calendar entry rather than creating duplicates.
         </p>
       </div>

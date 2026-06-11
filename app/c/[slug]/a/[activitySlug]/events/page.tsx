@@ -462,7 +462,7 @@ export default function ActivityEventsPage() {
             )}
           </div>
         ) : (
-          <p className="text-xs text-ink/40 italic">Join the league to create nights.</p>
+          <p className="text-xs text-ink/60 italic">Join the league to create nights.</p>
         )}
       </header>
 
@@ -480,7 +480,7 @@ export default function ActivityEventsPage() {
             <div>
               <label className="label">Start Time</label>
               <input type="time" className="input" value={nightTime} onChange={(e) => setNightTime(e.target.value)} />
-              <p className="text-xs text-ink/40 italic mt-1">Displayed as 12-hour clock.</p>
+              <p className="text-xs text-ink/60 italic mt-1">Displayed as 12-hour clock.</p>
             </div>
             <div>
               <label className="label">Number of Tables <span className="text-cinnabar">*</span></label>
@@ -491,7 +491,7 @@ export default function ActivityEventsPage() {
                 max={10}
                 label="Number of tables"
               />
-              <p className="text-xs text-ink/40 italic mt-1">Capacity: {numTables * 4}–{numTables * 5} players.</p>
+              <p className="text-xs text-ink/60 italic mt-1">Capacity: {numTables * 4}–{numTables * 5} players.</p>
             </div>
             <div>
               <label className="label">Games per Night <span className="text-cinnabar">*</span></label>
@@ -505,12 +505,12 @@ export default function ActivityEventsPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="label">Host <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span></label>
+              <label className="label">Host <span className="text-ink/50 normal-case tracking-normal italic font-normal">— optional</span></label>
               <select className="input" value={hostId} onChange={(e) => handleHostChange(e.target.value)}>
                 <option value="">— No host yet —</option>
                 {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
               </select>
-              <p className="text-xs text-ink/40 italic mt-1">A member can claim host later if none chosen here.</p>
+              <p className="text-xs text-ink/60 italic mt-1">A member can claim host later if none chosen here.</p>
             </div>
             <div className="md:col-span-2">
               <AddressFields
@@ -540,7 +540,7 @@ export default function ActivityEventsPage() {
                     }`}
                   >
                     <div className="text-sm font-medium">Normal</div>
-                    <div className="text-xs text-ink/50 italic">Visible to all club members.</div>
+                    <div className="text-xs text-ink/65 italic">Visible to all club members.</div>
                   </button>
                   <button
                     type="button"
@@ -562,14 +562,14 @@ export default function ActivityEventsPage() {
                     }`}
                   >
                     {isPro === false && (
-                      <span className="absolute top-2 right-2 text-[9px] tracking-[0.2em] uppercase px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar">
+                      <span className="absolute top-2 right-2 text-[11px] tracking-[0.2em] uppercase px-1.5 py-0.5 bg-cinnabar/10 border border-cinnabar/40 text-cinnabar">
                         Pro
                       </span>
                     )}
                     <div className="text-sm font-medium">Hidden</div>
-                    <div className="text-xs text-ink/50 italic">Invite-only. Hidden from others.</div>
+                    <div className="text-xs text-ink/65 italic">Invite-only. Hidden from others.</div>
                     {isPro === false && (
-                      <div className="text-[10px] tracking-[0.15em] uppercase text-cinnabar mt-2">
+                      <div className="text-xs tracking-[0.15em] uppercase text-cinnabar mt-2">
                         Upgrade to unlock →
                       </div>
                     )}
@@ -580,13 +580,13 @@ export default function ActivityEventsPage() {
                   <div className="mt-5 space-y-5 pl-4 border-l-2 border-cinnabar/30">
                     <div>
                       <label className="label">Invite club members</label>
-                      <p className="text-xs text-ink/40 italic mb-2">
+                      <p className="text-xs text-ink/60 italic mb-2">
                         {invitedMemberIds.size === 0
                           ? 'Select members to invite.'
                           : `${invitedMemberIds.size} selected`}
                       </p>
                       {members.length === 0 ? (
-                        <p className="text-xs text-ink/50 italic">No members to invite yet.</p>
+                        <p className="text-xs text-ink/65 italic">No members to invite yet.</p>
                       ) : (
                         <div className="max-h-48 overflow-y-auto border border-ink/15 p-2 space-y-1">
                           {members.map((m) => (
@@ -613,7 +613,7 @@ export default function ActivityEventsPage() {
 
                     <div>
                       <label className="label">
-                        Invite outside guests <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                        Invite outside guests <span className="text-ink/50 normal-case tracking-normal italic font-normal">— optional</span>
                       </label>
                       <textarea
                         className="input min-h-[60px] font-mono text-sm"
@@ -621,14 +621,14 @@ export default function ActivityEventsPage() {
                         onChange={(e) => setOutsideEmailsText(e.target.value)}
                         placeholder="sarah@example.com&#10;tom@example.com"
                       />
-                      <p className="text-xs text-ink/40 italic mt-1">
+                      <p className="text-xs text-ink/60 italic mt-1">
                         Email addresses, one per line. They&apos;ll be invited to join the club AND this event in one step. Max 20.
                       </p>
                     </div>
 
                     <div>
                       <label className="label">
-                        Welcome message <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional</span>
+                        Welcome message <span className="text-ink/50 normal-case tracking-normal italic font-normal">— optional</span>
                       </label>
                       <textarea
                         className="input min-h-[60px]"
@@ -659,7 +659,7 @@ export default function ActivityEventsPage() {
           <form onSubmit={createSeries} className="tile-border p-7 space-y-6 fade-up">
             <div>
               <h2 className="font-display text-2xl mb-1">New Series</h2>
-              <p className="text-xs text-ink/50 italic">
+              <p className="text-xs text-ink/65 italic">
                 Creates many game nights at once. Each one is fully editable afterward.
               </p>
             </div>
@@ -668,7 +668,7 @@ export default function ActivityEventsPage() {
               <div className="md:col-span-2">
                 <label className="label">Series Name <span className="text-cinnabar">*</span></label>
                 <input className="input" value={sName} onChange={(e) => setSName(e.target.value)} placeholder="Spring Season 2026" required />
-                <p className="text-xs text-ink/40 italic mt-1">
+                <p className="text-xs text-ink/60 italic mt-1">
                   Each night will be named like "{sName.trim() || 'Spring Season 2026'} — Night 01", "{sName.trim() || 'Spring Season 2026'} — Night 02", and so on.
                 </p>
               </div>
@@ -677,13 +677,13 @@ export default function ActivityEventsPage() {
                 <label className="label">First Date <span className="text-cinnabar">*</span></label>
                 <input type="date" className="input" value={sStartDate} onChange={(e) => setSStartDate(e.target.value)} required />
                 {sStartDate && (
-                  <p className="text-xs text-ink/40 italic mt-1">{formatWeekday(sStartDate)}s</p>
+                  <p className="text-xs text-ink/60 italic mt-1">{formatWeekday(sStartDate)}s</p>
                 )}
               </div>
               <div>
                 <label className="label">Last Date <span className="text-cinnabar">*</span></label>
                 <input type="date" className="input" value={sEndDate} onChange={(e) => setSEndDate(e.target.value)} required min={sStartDate} />
-                <p className="text-xs text-ink/40 italic mt-1">Inclusive — the final night may fall on this date.</p>
+                <p className="text-xs text-ink/60 italic mt-1">Inclusive — the final night may fall on this date.</p>
               </div>
 
               <div className="md:col-span-2">
@@ -711,7 +711,7 @@ export default function ActivityEventsPage() {
                   max={10}
                   label="Number of tables per night"
                 />
-                <p className="text-xs text-ink/40 italic mt-1">Capacity: {sNumTables * 4}–{sNumTables * 5} players per night.</p>
+                <p className="text-xs text-ink/60 italic mt-1">Capacity: {sNumTables * 4}–{sNumTables * 5} players per night.</p>
               </div>
               <div>
                 <label className="label">Games per Night <span className="text-cinnabar">*</span></label>
@@ -726,12 +726,12 @@ export default function ActivityEventsPage() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Host <span className="text-ink/30 normal-case tracking-normal italic font-normal">— optional, applies to every night</span></label>
+                <label className="label">Host <span className="text-ink/50 normal-case tracking-normal italic font-normal">— optional, applies to every night</span></label>
                 <select className="input" value={sHostId} onChange={(e) => handleSeriesHostChange(e.target.value)}>
                   <option value="">— No host yet —</option>
                   {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
                 </select>
-                <p className="text-xs text-ink/40 italic mt-1">
+                <p className="text-xs text-ink/60 italic mt-1">
                   Any member can claim host on individual nights later, or admins can edit each.
                 </p>
               </div>
@@ -750,9 +750,9 @@ export default function ActivityEventsPage() {
             </div>
 
             <div className="border-t border-ink/10 pt-5">
-              <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-2">Preview</div>
+              <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-2">Preview</div>
               {seriesDates.length === 0 ? (
-                <p className="text-sm text-ink/50 italic">Fill in start date, end date, and interval to see the generated nights.</p>
+                <p className="text-sm text-ink/65 italic">Fill in start date, end date, and interval to see the generated nights.</p>
               ) : (
                 <>
                   <p className="text-sm text-ink/70 mb-3">
@@ -768,7 +768,7 @@ export default function ActivityEventsPage() {
                       </span>
                     ))}
                     {seriesDates.length > 30 && (
-                      <span className="text-ink/50 italic px-2 py-1">+ {seriesDates.length - 30} more</span>
+                      <span className="text-ink/65 italic px-2 py-1">+ {seriesDates.length - 30} more</span>
                     )}
                   </div>
                 </>
@@ -787,10 +787,10 @@ export default function ActivityEventsPage() {
       })()}
 
       {loading && !hasLoaded ? (
-        <p className="text-ink/40 italic">Loading…</p>
+        <p className="text-ink/60 italic">Loading…</p>
       ) : nights.length === 0 ? (
         <div className="tile-border p-12 text-center">
-          <p className="font-display italic text-xl text-ink/50">No game nights yet.</p>
+          <p className="font-display italic text-xl text-ink/65">No game nights yet.</p>
           {cb.isMember && mode === 'none' && (
             <button onClick={() => setMode('night')} className="btn mt-6">Create the First</button>
           )}
@@ -810,7 +810,7 @@ export default function ActivityEventsPage() {
             {/* NEXT EVENT */}
             {nextEvent && (
               <section>
-                <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Next Event</div>
                 <NextEventCard
                   night={nextEvent}
                   eventBasePath={eventBasePath}
@@ -830,7 +830,7 @@ export default function ActivityEventsPage() {
             {/* UPCOMING */}
             {otherUpcoming.length > 0 && (
               <section>
-                <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">
                   Upcoming ({otherUpcoming.length})
                 </div>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -858,7 +858,7 @@ export default function ActivityEventsPage() {
             {/* PAST */}
             {past.length > 0 && (
               <section>
-                <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">
                   Past ({past.length})
                 </div>
                 <ul className="divide-y divide-ink/10 border-y border-ink/10">
@@ -885,7 +885,7 @@ export default function ActivityEventsPage() {
 
             {/* If no upcoming events, show a "next event" empty state hint */}
             {!nextEvent && past.length > 0 && (
-              <p className="text-ink/40 italic text-sm">Nothing scheduled.</p>
+              <p className="text-ink/60 italic text-sm">Nothing scheduled.</p>
             )}
           </div>
         );
@@ -916,28 +916,28 @@ function PastNightRow({
         className="w-full flex items-baseline justify-between gap-4 py-3 px-1 text-left hover:bg-ink/[0.03] transition-colors"
       >
         <div className="flex items-baseline gap-4 min-w-0 flex-1">
-          <span className="text-xs tracking-[0.2em] uppercase text-ink/40 whitespace-nowrap w-32 flex-shrink-0">
+          <span className="text-xs tracking-[0.2em] uppercase text-ink/60 whitespace-nowrap w-32 flex-shrink-0">
             {new Date(night.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
           </span>
           <span className="font-medium truncate">{night.name}</span>
           {night.host && (
-            <span className="text-xs text-ink/40 italic hidden sm:inline truncate">· {night.host.name}</span>
+            <span className="text-xs text-ink/60 italic hidden sm:inline truncate">· {night.host.name}</span>
           )}
         </div>
-        <span className={`text-ink/30 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`}>›</span>
+        <span className={`text-ink/50 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`}>›</span>
       </button>
       {expanded && (
         <div className="pl-2 pr-1 pb-5 fade-up">
           {standings === undefined ? (
-            <p className="text-xs text-ink/40 italic py-2">Loading standings…</p>
+            <p className="text-xs text-ink/60 italic py-2">Loading standings…</p>
           ) : standings.length === 0 ? (
-            <p className="text-xs text-ink/40 italic py-2">No scores recorded for this night.</p>
+            <p className="text-xs text-ink/60 italic py-2">No scores recorded for this night.</p>
           ) : (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[10px] tracking-[0.2em] uppercase text-ink/40">
+                    <tr className="text-xs tracking-[0.2em] uppercase text-ink/60">
                       <th className="text-left py-1 pr-3 w-8">#</th>
                       <th className="text-left py-1 pr-3">Player</th>
                       <th className="text-right py-1 px-2">Pts</th>
@@ -948,20 +948,20 @@ function PastNightRow({
                   <tbody>
                     {standings.map((s, i) => (
                       <tr key={s.user_id} className="border-t border-ink/10">
-                        <td className={`py-1.5 pr-3 rank-glyph ${i === 0 ? 'text-cinnabar' : i < 3 ? 'text-jade' : 'text-ink/40'}`}>
+                        <td className={`py-1.5 pr-3 rank-glyph ${i === 0 ? 'text-cinnabar' : i < 3 ? 'text-jade' : 'text-ink/60'}`}>
                           {i + 1}
                         </td>
                         <td className="py-1.5 pr-3 font-medium">{s.name}</td>
                         <td className="py-1.5 px-2 text-right font-display">{s.points}</td>
                         <td className="py-1.5 px-2 text-right">{s.wins}</td>
-                        <td className="py-1.5 pl-2 text-right text-ink/50 hidden sm:table-cell">{s.games}</td>
+                        <td className="py-1.5 pl-2 text-right text-ink/65 hidden sm:table-cell">{s.games}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="mt-3">
-                <Link href={`${eventBasePath}/${night.id}`} className="text-xs tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar">
+                <Link href={`${eventBasePath}/${night.id}`} className="text-xs tracking-[0.15em] uppercase text-ink/65 hover:text-cinnabar">
                   Full night details →
                 </Link>
               </div>

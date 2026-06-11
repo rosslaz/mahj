@@ -14,7 +14,7 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   const cb = useClub(slug);
 
   if (cb.loading || auth.loading) {
-    return <p className="text-ink/40 italic">Loading club…</p>;
+    return <p className="text-ink/60 italic">Loading club…</p>;
   }
   if (cb.notFound) {
     return (
@@ -83,11 +83,11 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
       <div className="border-b border-ink/10 pb-4 -mt-4">
         {/* Compact breadcrumb: My Clubs / Club Name */}
         <nav className="text-xs tracking-[0.2em] uppercase flex items-center gap-2 flex-wrap">
-          <Link href="/clubs" className="text-ink/40 hover:text-cinnabar transition-colors">My Clubs</Link>
+          <Link href="/clubs" className="text-ink/60 hover:text-cinnabar transition-colors">My Clubs</Link>
           <span className="text-ink/20">/</span>
           <span className="text-ink/80">{cb.club?.name}</span>
           {cb.role && (
-            <span className="ml-2 text-[10px] tracking-[0.25em] uppercase text-ink/40">{cb.role}</span>
+            <span className="ml-2 text-xs tracking-[0.25em] uppercase text-ink/60">{cb.role}</span>
           )}
         </nav>
         <nav className="mt-3 flex gap-5 flex-wrap text-sm items-center">
@@ -166,7 +166,7 @@ function ManageDropdown({
         }`}
       >
         Manage
-        <span className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+        <span className={`text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
       {open && (
         <div

@@ -96,16 +96,16 @@ export default function NearYou() {
     <section>
       {/* Section label — matches Next Event / For You / Upcoming / etc. */}
       <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Near You</div>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/60">Near You</div>
         {/* Mode tabs sit on the same row as the label, pushed right */}
-        <div className="flex items-center gap-1.5 text-[10px] tracking-[0.2em] uppercase">
+        <div className="flex items-center gap-1.5 text-xs tracking-[0.2em] uppercase">
           <button
             type="button"
             onClick={() => setMode('events')}
             className={`px-3 py-1 border transition-colors ${
               mode === 'events'
                 ? 'bg-jade text-bone border-jade'
-                : 'bg-bone text-ink/50 border-ink/15 hover:border-jade/40 hover:text-jade'
+                : 'bg-bone text-ink/65 border-ink/15 hover:border-jade/40 hover:text-jade'
             }`}
           >
             Events
@@ -116,7 +116,7 @@ export default function NearYou() {
             className={`px-3 py-1 border transition-colors ${
               mode === 'clubs'
                 ? 'bg-jade text-bone border-jade'
-                : 'bg-bone text-ink/50 border-ink/15 hover:border-jade/40 hover:text-jade'
+                : 'bg-bone text-ink/65 border-ink/15 hover:border-jade/40 hover:text-jade'
             }`}
           >
             Clubs
@@ -127,7 +127,7 @@ export default function NearYou() {
       {/* Filters row: distance dropdown + (events only) type chips */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <div className="flex items-center gap-2 text-xs">
-          <label className="text-ink/50 tracking-[0.15em] uppercase">Within</label>
+          <label className="text-ink/65 tracking-[0.15em] uppercase">Within</label>
           <select
             className="input py-1 px-2 text-sm w-auto"
             value={maxMiles}
@@ -159,7 +159,7 @@ export default function NearYou() {
 
       {/* Body */}
       {state.kind === 'idle' || state.kind === 'loading' ? (
-        <p className="text-ink/40 italic text-sm">
+        <p className="text-ink/60 italic text-sm">
           {mode === 'events' ? 'Looking for events…' : 'Looking for clubs…'}
         </p>
       ) : state.kind === 'no-zip' ? (
@@ -174,7 +174,7 @@ export default function NearYou() {
           <p className="text-sm text-ink/70 mb-1">
             We don&apos;t have coordinates for your ZIP code yet.
           </p>
-          <p className="text-xs text-ink/50 italic">
+          <p className="text-xs text-ink/65 italic">
             This is a Pungctual data issue, not yours. If you contact <a href="mailto:support@pungctual.com" className="text-jade underline">support</a> we&apos;ll add your ZIP to our database.
           </p>
         </div>
@@ -205,7 +205,7 @@ function EventCards({
           No public events within {maxMiles} miles
           {type !== 'all' ? ` matching ${TYPE_OPTIONS.find((t) => t.value === type)!.label.toLowerCase()}` : ''}.
         </p>
-        <p className="text-xs text-ink/50 italic mt-1">Try a wider radius or different filter.</p>
+        <p className="text-xs text-ink/65 italic mt-1">Try a wider radius or different filter.</p>
       </div>
     );
   }
@@ -220,19 +220,19 @@ function EventCards({
             className="tile-border p-5 hover:border-cinnabar/40 transition-colors fade-up flex flex-col"
             style={{ animationDelay: `${i * 0.04}s` }}
           >
-            <div className="text-[10px] tracking-[0.25em] uppercase text-jade mb-1.5">
+            <div className="text-xs tracking-[0.25em] uppercase text-jade mb-1.5">
               {ev.club.name} · {typeLabel}
             </div>
-            <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-2">
+            <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-2">
               {new Date(ev.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               {ev.start_time && <span className="ml-2">· {formatTime12(ev.start_time)}</span>}
             </div>
             <div className="font-display text-xl mb-1 line-clamp-2">{ev.name}</div>
             {(ev.city && ev.state) && (
-              <div className="text-xs text-ink/50 italic">{ev.city}, {ev.state}</div>
+              <div className="text-xs text-ink/65 italic">{ev.city}, {ev.state}</div>
             )}
             <div className="mt-auto flex items-center justify-end pt-3 border-t border-ink/10">
-              <span className="text-[10px] tracking-[0.15em] uppercase text-jade">{ev.miles} mi away</span>
+              <span className="text-xs tracking-[0.15em] uppercase text-jade">{ev.miles} mi away</span>
             </div>
           </Link>
         );
@@ -246,7 +246,7 @@ function ClubCards({ clubs, maxMiles }: { clubs: NearbyClub[]; maxMiles: number 
     return (
       <div className="tile-border p-5">
         <p className="text-sm text-ink/70">No public clubs within {maxMiles} miles.</p>
-        <p className="text-xs text-ink/50 italic mt-1">Try a wider radius.</p>
+        <p className="text-xs text-ink/65 italic mt-1">Try a wider radius.</p>
       </div>
     );
   }
@@ -262,21 +262,21 @@ function ClubCards({ clubs, maxMiles }: { clubs: NearbyClub[]; maxMiles: number 
             style={{ animationDelay: `${i * 0.04}s` }}
           >
             {location && (
-              <div className="text-[10px] tracking-[0.25em] uppercase text-jade mb-1.5">{location}</div>
+              <div className="text-xs tracking-[0.25em] uppercase text-jade mb-1.5">{location}</div>
             )}
             <div className="font-display text-xl mb-2 line-clamp-2">{c.name}</div>
             {c.description && (
               <div className="text-sm text-ink/60 line-clamp-2 mb-3">{c.description}</div>
             )}
             <div className="mt-auto pt-3 border-t border-ink/10 space-y-1.5">
-              <div className="text-[11px] text-ink/50">{memberRangeLabel(c.memberRange)}</div>
+              <div className="text-xs text-ink/65">{memberRangeLabel(c.memberRange)}</div>
               {c.upcomingPublicEventCount > 0 && (
-                <div className="text-[11px] text-cinnabar/80">
+                <div className="text-xs text-cinnabar/80">
                   {c.upcomingPublicEventCount} upcoming event{c.upcomingPublicEventCount === 1 ? '' : 's'}
                 </div>
               )}
               <div className="flex items-center justify-end">
-                <span className="text-[10px] tracking-[0.15em] uppercase text-jade">{c.miles} mi away</span>
+                <span className="text-xs tracking-[0.15em] uppercase text-jade">{c.miles} mi away</span>
               </div>
             </div>
           </Link>

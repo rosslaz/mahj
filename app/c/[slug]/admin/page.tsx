@@ -124,9 +124,9 @@ export default function ClubAdminPage() {
     if (error) alert(error.message); else load();
   }
 
-  async function removeMember(userId: string) {
+  async function removeMember(userId: string, name: string) {
     if (!cb.club) return;
-    if (!confirm('Remove this member? Their historical scores will remain.')) return;
+    if (!confirm('Remove ' + name + ' from the club? Their historical scores will remain.')) return;
     const { error } = await supabase.from('club_members').delete().eq('club_id', cb.club.id).eq('user_id', userId);
     if (error) alert(error.message); else load();
   }
@@ -176,9 +176,9 @@ export default function ClubAdminPage() {
         </div>
 
         {loading ? (
-          <p className="text-ink/40 italic">Loading…</p>
+          <p className="text-ink/60 italic">Loading…</p>
         ) : activities.length === 0 ? (
-          <div className="tile-border p-6 text-center text-ink/50 italic font-display text-sm">
+          <div className="tile-border p-6 text-center text-ink/65 italic font-display text-sm">
             No activities yet.
           </div>
         ) : (
@@ -187,13 +187,13 @@ export default function ClubAdminPage() {
               <li key={a.id}>
                 <Link href={`/c/${slug}/a/${a.slug}`} className="flex items-center justify-between py-4 hover:text-cinnabar">
                   <span className="flex items-baseline gap-3 min-w-0">
-                    <span className="text-[10px] tracking-[0.2em] uppercase text-jade w-20 flex-shrink-0">{ACTIVITY_TYPE_LABEL[a.type]}</span>
+                    <span className="text-xs tracking-[0.2em] uppercase text-jade w-20 flex-shrink-0">{ACTIVITY_TYPE_LABEL[a.type]}</span>
                     <span className="font-medium truncate">{a.name}</span>
                     {a.is_public && (
-                      <span className="text-[10px] tracking-[0.2em] uppercase text-ink/40">Public</span>
+                      <span className="text-xs tracking-[0.2em] uppercase text-ink/60">Public</span>
                     )}
                   </span>
-                  <span className="text-ink/30">›</span>
+                  <span className="text-ink/50">›</span>
                 </Link>
               </li>
             ))}
@@ -205,26 +205,26 @@ export default function ClubAdminPage() {
       <section className="tile-border p-6">
         <div className="flex items-baseline justify-between mb-3 flex-wrap gap-3">
           <div>
-            <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-1">Join Code</div>
+            <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-1">Join Code</div>
             <div className="font-display text-3xl tracking-[0.3em]">{joinCode || '—'}</div>
           </div>
           <button onClick={regenerateCode} className="btn btn-ghost text-xs">Regenerate</button>
         </div>
-        <p className="text-xs text-ink/50 italic">Share this with new players. They enter it at <code>/clubs/join</code>.</p>
+        <p className="text-xs text-ink/65 italic">Share this with new players. They enter it at <code>/clubs/join</code>.</p>
         {isPro === false && (
           <div className={`mt-4 pt-4 border-t border-ink/10 text-xs flex items-baseline justify-between flex-wrap gap-2 ${
-            atMemberCap ? 'text-cinnabar' : 'text-ink/50'
+            atMemberCap ? 'text-cinnabar' : 'text-ink/65'
           }`}>
             <span>
               {memberCount} of {FREE_MEMBER_CAP} member slots used
-              <span className="text-ink/35 italic ml-1">(Free tier)</span>
+              <span className="text-ink/55 italic ml-1">(Free tier)</span>
             </span>
             {atMemberCap ? (
               <Link href={`/c/${slug}/billing`} className="text-cinnabar hover:underline">
                 Cap reached — upgrade to add more
               </Link>
             ) : (
-              <Link href={`/c/${slug}/billing`} className="text-ink/50 hover:text-cinnabar hover:underline">
+              <Link href={`/c/${slug}/billing`} className="text-ink/65 hover:text-cinnabar hover:underline">
                 Upgrade for unlimited
               </Link>
             )}
@@ -238,12 +238,12 @@ export default function ClubAdminPage() {
       {/* Members management */}
       <section>
         <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-          <div className="text-xs tracking-[0.2em] uppercase text-ink/40">Owners & Admins ({admins.length})</div>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60">Owners & Admins ({admins.length})</div>
           {showAdminCap && (
-            <div className="text-[11px] tracking-[0.15em] uppercase text-ink/50 flex items-baseline gap-2">
+            <div className="text-xs tracking-[0.15em] uppercase text-ink/65 flex items-baseline gap-2">
               <span>
                 {adminCount} of {FREE_ADMIN_CAP} admin slot{FREE_ADMIN_CAP === 1 ? '' : 's'} used
-                <span className="text-ink/35 normal-case tracking-normal italic ml-1">(Free tier)</span>
+                <span className="text-ink/55 normal-case tracking-normal italic ml-1">(Free tier)</span>
               </span>
               {atAdminCap && (
                 <Link href={`/c/${slug}/billing`} className="text-cinnabar hover:underline tracking-[0.15em]">
@@ -257,7 +257,7 @@ export default function ClubAdminPage() {
           {admins.map((a) => (
             <span key={a.user_id} className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm border ${a.role === 'owner' ? 'bg-cinnabar/10 border-cinnabar/30' : 'bg-jade/10 border-jade/30'}`}>
               <span className="font-medium">{a.name}</span>
-              <span className="text-[10px] tracking-[0.2em] uppercase text-ink/40">{a.role}</span>
+              <span className="text-xs tracking-[0.2em] uppercase text-ink/60">{a.role}</span>
             </span>
           ))}
         </div>
@@ -270,9 +270,9 @@ export default function ClubAdminPage() {
         </div>
 
         {loading ? (
-          <p className="text-ink/40 italic">Loading…</p>
+          <p className="text-ink/60 italic">Loading…</p>
         ) : filtered.length === 0 ? (
-          <p className="text-ink/40 italic">No members match.</p>
+          <p className="text-ink/60 italic">No members match.</p>
         ) : (
           <ul className="divide-y divide-ink/10 border-y border-ink/10">
             {filtered.map((m) => (
@@ -280,20 +280,20 @@ export default function ClubAdminPage() {
                 <div className="flex items-baseline gap-3 min-w-0">
                   <span className="font-medium truncate">{m.name}</span>
                   {m.role !== 'member' && (
-                    <span className={`text-[10px] tracking-[0.2em] uppercase ${m.role === 'owner' ? 'text-cinnabar' : 'text-jade'}`}>
+                    <span className={`text-xs tracking-[0.2em] uppercase ${m.role === 'owner' ? 'text-cinnabar' : 'text-jade'}`}>
                       {m.role}
                     </span>
                   )}
-                  <span className="text-xs text-ink/40 truncate">{m.email}</span>
+                  <span className="text-xs text-ink/60 truncate">{m.email}</span>
                 </div>
                 {m.role === 'owner' ? (
-                  <span className="text-xs text-ink/40 italic">cannot change</span>
+                  <span className="text-xs text-ink/60 italic">cannot change</span>
                 ) : m.role === 'admin' ? (
                   <div className="flex gap-3 items-center">
-                    <button onClick={() => setRole(m.user_id, 'member')} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar">
+                    <button onClick={() => setRole(m.user_id, 'member')} className="text-xs tracking-[0.15em] uppercase text-ink/60 hover:text-cinnabar py-3 -my-3 px-1.5 -mx-1.5">
                       Revoke admin
                     </button>
-                    <button onClick={() => removeMember(m.user_id)} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar">
+                    <button onClick={() => removeMember(m.user_id, m.name)} className="text-xs tracking-[0.15em] uppercase text-cinnabar/80 hover:text-cinnabar py-3 -my-3 px-1.5 -mx-1.5">
                       Remove
                     </button>
                   </div>
@@ -303,16 +303,16 @@ export default function ClubAdminPage() {
                       <Link
                         href={`/c/${slug}/billing`}
                         title="Free clubs allow 1 admin. Upgrade to Pro for unlimited."
-                        className="text-xs tracking-[0.15em] uppercase text-ink/30 hover:text-cinnabar hover:underline"
+                        className="text-xs tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar hover:underline"
                       >
                         Pro for more admins
                       </Link>
                     ) : (
-                      <button onClick={() => setRole(m.user_id, 'admin')} className="text-xs tracking-[0.15em] uppercase text-jade hover:underline">
+                      <button onClick={() => setRole(m.user_id, 'admin')} className="text-xs tracking-[0.15em] uppercase text-jade hover:underline py-3 -my-3 px-1.5 -mx-1.5">
                         Make admin
                       </button>
                     )}
-                    <button onClick={() => removeMember(m.user_id)} className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar">
+                    <button onClick={() => removeMember(m.user_id, m.name)} className="text-xs tracking-[0.15em] uppercase text-cinnabar/80 hover:text-cinnabar py-3 -my-3 px-1.5 -mx-1.5">
                       Remove
                     </button>
                   </div>

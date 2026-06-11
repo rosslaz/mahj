@@ -78,7 +78,7 @@ function SignupAffordance({
     // Don't try to handle invite accept/decline inline — too much state. Card
     // already drills into the event detail (where the banner lives).
     return (
-      <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}>
+      <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar text-xs`}>
         Tap to respond
       </span>
     );
@@ -86,7 +86,7 @@ function SignupAffordance({
 
   if (personalStatus.kind === 'pending_signup') {
     return (
-      <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}>
+      <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar text-xs`}>
         Pending approval
       </span>
     );
@@ -102,14 +102,14 @@ function SignupAffordance({
           personalStatus.kind === 'hosting'
             ? 'bg-gold/10 border-gold/40 text-gold'
             : 'bg-jade/10 border-jade/40 text-jade'
-        } ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}>
+        } text-xs`}>
           {personalStatus.kind === 'hosting' ? "You're hosting" : "You're in"}
         </span>
       );
     }
     return (
       <div className="flex items-center gap-2">
-        <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-jade/10 border-jade/40 text-jade ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}>
+        <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-jade/10 border-jade/40 text-jade text-xs`}>
           You&apos;re in
         </span>
         <button
@@ -122,7 +122,7 @@ function SignupAffordance({
             try { await onWithdraw(eventId); } finally { setBusy(false); }
           }}
           disabled={busy}
-          className="text-[10px] tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar disabled:opacity-50"
+          className="text-xs tracking-[0.15em] uppercase text-ink/60 hover:text-cinnabar disabled:opacity-50 p-2.5 -m-2.5"
         >
           {busy ? '…' : 'Withdraw'}
         </button>
@@ -137,14 +137,14 @@ function SignupAffordance({
       // No handler wired (e.g. club home page) — show a passive "Not signed up"
       // chip that prompts the user to drill in.
       return (
-        <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}>
+        <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border bg-cinnabar/10 border-cinnabar/30 text-cinnabar text-xs`}>
           Not signed up
         </span>
       );
     }
     if (isFull) {
       return (
-        <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border border-ink/15 text-ink/40 ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}>
+        <span className={`tracking-[0.15em] uppercase px-2.5 py-1 border border-ink/15 text-ink/60 text-xs`}>
           Full
         </span>
       );
@@ -160,7 +160,7 @@ function SignupAffordance({
           try { await onSignup(eventId); } finally { setBusy(false); }
         }}
         disabled={busy}
-        className={`tracking-[0.15em] uppercase px-3 py-1.5 bg-jade text-bone hover:bg-jade/90 disabled:opacity-50 border border-jade transition-colors ${size === 'lg' ? 'text-[11px]' : 'text-[10px]'}`}
+        className={`tracking-[0.15em] uppercase px-4 py-2.5 min-h-[44px] bg-jade text-bone hover:bg-jade/90 disabled:opacity-50 border border-jade transition-colors text-xs`}
       >
         {busy ? 'Signing up…' : 'Sign me up'}
       </button>
@@ -196,14 +196,14 @@ export function NextEventCard({
       className="block tile-border p-8 md:p-10 hover:border-cinnabar/40 transition-colors fade-up"
     >
       {leagueName && (
-        <div className="text-[10px] tracking-[0.3em] uppercase text-jade mb-3">{leagueName}</div>
+        <div className="text-xs tracking-[0.3em] uppercase text-jade mb-3">{leagueName}</div>
       )}
       <div className="flex items-baseline justify-between flex-wrap gap-3 mb-4">
         <div className="text-xs tracking-[0.25em] uppercase text-cinnabar">
           {new Date(night.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-          {night.start_time && <span className="ml-3 text-ink/50">· {formatTime12(night.start_time)}</span>}
+          {night.start_time && <span className="ml-3 text-ink/65">· {formatTime12(night.start_time)}</span>}
         </div>
-        <span className={`text-[10px] tracking-[0.2em] uppercase px-3 py-1 border ${statusChipClass(status.tone)}`}>
+        <span className={`text-xs tracking-[0.2em] uppercase px-3 py-1 border ${statusChipClass(status.tone)}`}>
           {status.label}
         </span>
       </div>
@@ -255,20 +255,20 @@ export function UpcomingCard({
       style={{ animationDelay: `${index * 0.04}s` }}
     >
       {leagueName && (
-        <div className="text-[10px] tracking-[0.25em] uppercase text-jade mb-1.5">{leagueName}</div>
+        <div className="text-xs tracking-[0.25em] uppercase text-jade mb-1.5">{leagueName}</div>
       )}
-      <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-2">
+      <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-2">
         {new Date(night.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         {night.start_time && <span className="ml-2">· {formatTime12(night.start_time)}</span>}
       </div>
       <div className="font-display text-xl mb-1 line-clamp-2">{night.name}</div>
-      <div className="text-xs text-ink/50 mb-3 italic">
+      <div className="text-xs text-ink/65 mb-3 italic">
         {night.host ? <>Hosted by {night.host.name}</> : <span className="text-cinnabar/80">Host needed</span>}
       </div>
       <div className="mt-auto flex items-center justify-between pt-3 border-t border-ink/10 gap-2 flex-wrap">
-        <span className="text-xs text-ink/50">{signupCount}/{capacityMax}</span>
+        <span className="text-xs text-ink/65">{signupCount}/{capacityMax}</span>
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span className={`text-[10px] tracking-[0.15em] uppercase px-2 py-0.5 border ${statusChipClass(status.tone)}`}>
+          <span className={`text-xs tracking-[0.15em] uppercase px-2 py-0.5 border ${statusChipClass(status.tone)}`}>
             {status.label}
           </span>
           <SignupAffordance

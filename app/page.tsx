@@ -400,20 +400,20 @@ function HomePageInner() {
             </p>
             <div className="mt-10 flex flex-wrap gap-3 items-baseline">
               <Link href="/sign-in" className="btn">Get Started Free</Link>
-              <a href="#teachers" className="text-sm tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar transition-colors">
+              <a href="#teachers" className="text-sm tracking-[0.15em] uppercase text-ink/65 hover:text-cinnabar transition-colors">
                 For teachers →
               </a>
-              <a href="#pricing" className="text-sm tracking-[0.15em] uppercase text-ink/50 hover:text-cinnabar transition-colors">
+              <a href="#pricing" className="text-sm tracking-[0.15em] uppercase text-ink/65 hover:text-cinnabar transition-colors">
                 See pricing →
               </a>
             </div>
-            <p className="mt-4 text-xs text-ink/40 italic">
+            <p className="mt-4 text-xs text-ink/60 italic">
               14-day Pro trial on your first club. No card required.
             </p>
           </div>
           <div className="md:col-span-4 fade-up" style={{ animationDelay: '0.2s' }}>
             <div className="tile-border p-6">
-              <div className="font-display italic text-sm text-ink/50 mb-4">Built for mahjong</div>
+              <div className="font-display italic text-sm text-ink/65 mb-4">Built for mahjong</div>
               <ul className="space-y-3 text-sm">
                 <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Leagues with lifetime standings</span></li>
                 <li className="flex gap-3"><span className="text-cinnabar font-display text-xl leading-none">·</span><span>Tournaments and classes</span></li>
@@ -476,10 +476,10 @@ function HomePageInner() {
           <div className="grid md:grid-cols-12 gap-10 items-center">
             <div className="md:col-span-5 md:order-2">
               <div className="tile-border p-7 bg-bone">
-                <div className="text-xs tracking-[0.3em] uppercase text-ink/40 mb-3">Beginner Class — Spring</div>
+                <div className="text-xs tracking-[0.3em] uppercase text-ink/60 mb-3">Beginner Class — Spring</div>
                 <div className="font-display text-2xl mb-1">Session 4 of 8</div>
-                <div className="text-xs text-ink/50 mb-5">Tue Mar 18 · 7:00 PM</div>
-                <div className="text-xs tracking-[0.2em] uppercase text-ink/50 mb-2">Roster · 8 students</div>
+                <div className="text-xs text-ink/65 mb-5">Tue Mar 18 · 7:00 PM</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/65 mb-2">Roster · 8 students</div>
                 <div className="space-y-1.5">
                   {[
                     { name: 'Emma R.', status: 'Confirmed', tone: 'jade' },
@@ -493,8 +493,8 @@ function HomePageInner() {
                   ].map((s) => (
                     <div key={s.name} className="flex items-center justify-between text-sm border-b border-ink/10 pb-1.5">
                       <span>{s.name}</span>
-                      <span className={`text-[10px] tracking-[0.2em] uppercase ${
-                        s.tone === 'jade' ? 'text-jade' : s.tone === 'cinnabar' ? 'text-cinnabar' : 'text-ink/40'
+                      <span className={`text-xs tracking-[0.2em] uppercase ${
+                        s.tone === 'jade' ? 'text-jade' : s.tone === 'cinnabar' ? 'text-cinnabar' : 'text-ink/60'
                       }`}>
                         {s.status}
                       </span>
@@ -535,7 +535,7 @@ function HomePageInner() {
                 </li>
               </ul>
               <p className="text-sm text-ink/60 italic leading-relaxed">
-                Pungctual handles the scheduling layer. Keep using whatever you already use to collect class fees — Venmo, cash, whatever works. <span className="text-ink/50">(Built-in payments are on the roadmap.)</span>
+                Pungctual handles the scheduling layer. Keep using whatever you already use to collect class fees — Venmo, cash, whatever works. <span className="text-ink/65">(Built-in payments are on the roadmap.)</span>
               </p>
             </div>
           </div>
@@ -562,22 +562,22 @@ function HomePageInner() {
             </div>
             <div className="md:col-span-6">
               <div className="tile-border p-7 bg-bone">
-                <div className="text-xs tracking-[0.3em] uppercase text-ink/40 mb-3">Tuesday Night · Mar 4</div>
+                <div className="text-xs tracking-[0.3em] uppercase text-ink/60 mb-3">Tuesday Night · Mar 4</div>
                 <div className="font-display text-2xl mb-5">Week 12 — Sevens Rule</div>
-                <div className="text-xs tracking-[0.2em] uppercase text-ink/50 mb-2">7 of 8 signed up</div>
+                <div className="text-xs tracking-[0.2em] uppercase text-ink/65 mb-2">7 of 8 signed up</div>
                 <div className="space-y-1.5 mb-5">
                   {['Cecilia P.', 'Ross L.', 'Sarah M.', 'Tom K.', 'Linda H.', 'David W.', 'Mei C.'].map((name) => (
                     <div key={name} className="flex items-center justify-between text-sm border-b border-ink/10 pb-1.5">
                       <span>{name}</span>
-                      <span className="text-[10px] tracking-[0.2em] uppercase text-jade">Confirmed</span>
+                      <span className="text-xs tracking-[0.2em] uppercase text-jade">Confirmed</span>
                     </div>
                   ))}
                   <div className="flex items-center justify-between text-sm border-b border-ink/10 pb-1.5">
-                    <span className="text-ink/40 italic">— open seat —</span>
-                    <span className="text-[10px] tracking-[0.2em] uppercase text-cinnabar">Open</span>
+                    <span className="text-ink/60 italic">— open seat —</span>
+                    <span className="text-xs tracking-[0.2em] uppercase text-cinnabar">Open</span>
                   </div>
                 </div>
-                <div className="text-xs text-ink/50 italic">2 tables · 4 games planned</div>
+                <div className="text-xs text-ink/65 italic">2 tables · 4 games planned</div>
               </div>
             </div>
           </div>
@@ -628,7 +628,7 @@ function HomePageInner() {
           <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
             {/* FREE */}
             <div className="tile-border p-7 flex flex-col">
-              <div className="text-xs tracking-[0.3em] uppercase text-ink/50 mb-2">Free</div>
+              <div className="text-xs tracking-[0.3em] uppercase text-ink/65 mb-2">Free</div>
               <div className="font-display text-5xl mb-2">$0</div>
               <p className="text-sm text-ink/60 italic mb-6">Forever, for small clubs.</p>
               <ul className="space-y-2.5 text-sm flex-1 mb-6">
@@ -644,11 +644,11 @@ function HomePageInner() {
 
             {/* PRO */}
             <div className="tile-border p-7 flex flex-col border-jade/40 bg-jade/[0.03] relative">
-              <div className="absolute top-4 right-4 text-[10px] tracking-[0.2em] uppercase text-jade bg-jade/10 border border-jade/40 px-2 py-0.5">
+              <div className="absolute top-4 right-4 text-xs tracking-[0.2em] uppercase text-jade bg-jade/10 border border-jade/40 px-2 py-0.5">
                 14-day trial
               </div>
               <div className="text-xs tracking-[0.3em] uppercase text-jade mb-2">Pro</div>
-              <div className="font-display text-5xl mb-2">$9<span className="text-2xl text-ink/50">/mo</span></div>
+              <div className="font-display text-5xl mb-2">$9<span className="text-2xl text-ink/65">/mo</span></div>
               <p className="text-sm text-ink/60 italic mb-6">Or $90/year — save 17%.</p>
               <ul className="space-y-2.5 text-sm flex-1 mb-6">
                 <li className="flex gap-3"><span className="text-jade font-display leading-none">·</span><span><strong>Unlimited members</strong></span></li>
@@ -662,7 +662,7 @@ function HomePageInner() {
             </div>
           </div>
 
-          <p className="text-center text-xs text-ink/40 italic mt-6">
+          <p className="text-center text-xs text-ink/60 italic mt-6">
             Pricing in USD. Subscribe with a card; cancel any time from the billing page.
           </p>
         </section>
@@ -681,7 +681,7 @@ function HomePageInner() {
             <div className="mt-8">
               <Link href="/sign-in" className="btn">Get Started</Link>
             </div>
-            <p className="mt-10 text-xs text-ink/40 italic">
+            <p className="mt-10 text-xs text-ink/60 italic">
               Questions before you sign up? Email <a href="mailto:hello@pungctual.com" className="text-cinnabar hover:underline">hello@pungctual.com</a>.
             </p>
           </div>
@@ -691,7 +691,7 @@ function HomePageInner() {
     );
   }
 
-  if (auth.loading || loading) return <p className="text-ink/40 italic">Loading…</p>;
+  if (auth.loading || loading) return <p className="text-ink/60 italic">Loading…</p>;
 
   // -------------------- SIGNED IN, NO CLUBS --------------------
   if (clubs.length === 0) {
@@ -702,8 +702,8 @@ function HomePageInner() {
           <h1 className="font-display text-5xl">{auth.name || 'Player'}</h1>
         </header>
         <div className="tile-border p-10 text-center">
-          <p className="font-display italic text-xl text-ink/50 mb-2">You haven&apos;t joined a club yet.</p>
-          <p className="text-sm text-ink/50 mb-6">Start one for your group, join one with a code, or look for clubs and events near you below.</p>
+          <p className="font-display italic text-xl text-ink/65 mb-2">You haven&apos;t joined a club yet.</p>
+          <p className="text-sm text-ink/65 mb-6">Start one for your group, join one with a code, or look for clubs and events near you below.</p>
           <div className="flex justify-center gap-3 flex-wrap">
             <Link href="/clubs/new" className="btn">Create a Club</Link>
             <Link href="/clubs/join" className="btn btn-ghost">Join with Code</Link>
@@ -742,7 +742,7 @@ function HomePageInner() {
           you opened the app. */}
       {actions.length > 0 && (
         <section>
-          <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">For You</div>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">For You</div>
           <ul className="divide-y divide-ink/10 border-y border-ink/10">
             {actions.map((a) => (
               <li key={a.id}>
@@ -751,7 +751,7 @@ function HomePageInner() {
                     <span className={`w-1.5 h-1.5 rounded-full ${a.tone === 'warn' ? 'bg-cinnabar' : 'bg-jade'}`} />
                     <span>{a.label}</span>
                   </span>
-                  <span className="text-ink/30">›</span>
+                  <span className="text-ink/50">›</span>
                 </Link>
               </li>
             ))}
@@ -761,7 +761,7 @@ function HomePageInner() {
 
       {/* NEXT EVENT — the headline upcoming thing across all your clubs */}
       <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Next Event</div>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Next Event</div>
         {nextEvent ? (
           <NextEventCard
             night={nextEvent}
@@ -773,7 +773,7 @@ function HomePageInner() {
           />
         ) : (
           <div className="tile-border p-10 text-center">
-            <p className="font-display italic text-xl text-ink/50">Nothing scheduled across your clubs.</p>
+            <p className="font-display italic text-xl text-ink/65">Nothing scheduled across your clubs.</p>
           </div>
         )}
       </section>
@@ -781,7 +781,7 @@ function HomePageInner() {
       {/* UPCOMING — the next 3 events after the headline */}
       {upcoming.length > 0 && (
         <section>
-          <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Upcoming</div>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Upcoming</div>
           <div className="grid md:grid-cols-3 gap-4">
             {upcoming.map((n, i) => (
               <UpcomingCard
@@ -802,8 +802,8 @@ function HomePageInner() {
       {/* MY CLUBS — the entry point to specific clubs */}
       <section>
         <div className="flex items-baseline justify-between mb-3">
-          <div className="text-xs tracking-[0.2em] uppercase text-ink/40">My Clubs</div>
-          <Link href="/clubs" className="text-xs tracking-[0.2em] uppercase text-ink/50 hover:text-cinnabar">Manage →</Link>
+          <div className="text-xs tracking-[0.2em] uppercase text-ink/60">My Clubs</div>
+          <Link href="/clubs" className="text-xs tracking-[0.2em] uppercase text-ink/65 hover:text-cinnabar">Manage →</Link>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {clubs.map((c, i) => (
@@ -814,7 +814,7 @@ function HomePageInner() {
               style={{ animationDelay: `${i * 0.04}s` }}
             >
               <div className="flex items-baseline justify-between mb-2">
-                <span className="text-[10px] tracking-[0.25em] uppercase text-ink/40">{c.role}</span>
+                <span className="text-xs tracking-[0.25em] uppercase text-ink/60">{c.role}</span>
               </div>
               <div className="font-display text-2xl mb-1">{c.name}</div>
               {c.description && <div className="text-sm text-ink/60 line-clamp-2">{c.description}</div>}
@@ -825,7 +825,7 @@ function HomePageInner() {
 
       {/* LIFETIME STATS — historical, not actionable. Moved below clubs. */}
       <section>
-        <div className="text-xs tracking-[0.2em] uppercase text-ink/40 mb-3">Lifetime</div>
+        <div className="text-xs tracking-[0.2em] uppercase text-ink/60 mb-3">Lifetime</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink/15 border border-ink/15">
           <StatCell label="Games" value={stats.games_played.toLocaleString()} />
           <StatCell label="Wins" value={stats.total_wins.toLocaleString()} />
@@ -848,9 +848,9 @@ function HomePageInner() {
 function StatCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="bg-bone p-6 md:p-7">
-      <div className="text-[10px] tracking-[0.2em] uppercase text-ink/50 mb-2">{label}</div>
+      <div className="text-xs tracking-[0.2em] uppercase text-ink/65 mb-2">{label}</div>
       <div className="font-display text-3xl md:text-4xl">{value}</div>
-      {sub && <div className="text-[10px] tracking-[0.15em] uppercase text-ink/40 mt-1 italic normal-case tracking-normal">{sub}</div>}
+      {sub && <div className="text-xs tracking-[0.15em] uppercase text-ink/60 mt-1 italic normal-case tracking-normal">{sub}</div>}
     </div>
   );
 }

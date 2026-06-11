@@ -228,7 +228,7 @@ export function InlineConfirm({
       <button
         onClick={() => setArmed(false)}
         disabled={busy}
-        className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-ink"
+        className="text-xs tracking-[0.15em] uppercase text-ink/60 hover:text-ink"
       >
         {cancelLabel}
       </button>
