@@ -1,0 +1,27 @@
+-- ============================================================
+-- Migration 0034: drop the dead public_events view
+--
+-- (Code audit 2026-06-10, finding L-1.)
+--
+-- History: 0011 created public_events as the anon-safe discovery surface
+-- (redacted columns, no street) and revoked anon's direct SELECT on events.
+-- But the view is security_invoker, so for anon the underlying events RLS
+-- still applies — and anon matches no policy arm — meaning the view never
+-- actually worked for logged-out discovery ("permission denied"), and for
+-- authenticated non-members it returned zero rows. Discovery was rebuilt
+-- on the service-role client in app/actions/discovery.ts (2026-06-10),
+-- which enforces the public/active/not-deleted/normal-visibility filters
+-- explicitly and projects only redacted fields.
+--
+-- After that rebuild the view has ZERO references in the app. Leaving it
+-- around is a trap: future code might "fix" it and reintroduce a broken
+-- discovery path. Drop it.
+--
+-- NOT touched: `revoke select on events from anon` (0011) stays in force —
+-- anon still must not read events directly; discovery.ts is the only
+-- discovery surface and it runs server-side.
+--
+-- Idempotent — safe to re-apply.
+-- ============================================================
+
+drop view if exists public.public_events;

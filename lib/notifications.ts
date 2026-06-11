@@ -16,6 +16,7 @@
  */
 
 import { getServiceSupabase } from '@/lib/supabase-service';
+import { etToday, etTomorrow } from '@/lib/dates';
 import { sendPushToUser, type NotificationCategory } from './push-server';
 
 // Service-role client. Bypasses RLS so we can query across users to find
@@ -522,20 +523,10 @@ export async function dispatchEventReminder(eventId: string): Promise<{
   // automated cron, this is always "Today" because the cron only fires for
   // same-day events. For the manual "Send reminder" button (which a host
   // might press for an event days away), we pick a sensible phrasing.
-  const todayET = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date());  // "YYYY-MM-DD"
+  const todayET = etToday();  // "YYYY-MM-DD" in Eastern (lib/dates)
   const eventDate = event.date as string;  // "YYYY-MM-DD"
 
-  // Tomorrow in Eastern, as YYYY-MM-DD. Done via Date math on UTC values
-  // that happen to coincide with date boundaries in ET — close enough for
-  // the prefix decision since YYYY-MM-DD is unambiguous.
-  const tomorrowET = (() => {
-    const d = new Date(todayET + 'T12:00:00Z');  // safely mid-day, avoids DST edge
-    d.setUTCDate(d.getUTCDate() + 1);
-    return d.toISOString().slice(0, 10);
-  })();
+  const tomorrowET = etTomorrow();
 
   let titlePrefix: string;
   let bodyDatePart = '';
@@ -594,18 +585,10 @@ export async function runReminderSweep(opts?: { todayDateOverride?: string }): P
 }> {
   const errors: string[] = [];
 
-  // Compute "today" in Eastern. The cron fires daily; we want the date in
-  // ET when this runs. Using Intl.DateTimeFormat to get the proper local date
+  // Compute "today" in Eastern (lib/dates etToday — the canonical helper
+  // every "today" gate shares). The cron fires daily; we want the ET date
   // regardless of where the Vercel function physically runs.
-  const todayDate = opts?.todayDateOverride ?? (() => {
-    const nyFormatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    return nyFormatter.format(new Date());  // "2026-03-17"
-  })();
+  const todayDate = opts?.todayDateOverride ?? etToday();
 
   // Query candidates: events scheduled for today that haven't been reminded
   // yet. We don't filter on start_time here — the cron runs once in the

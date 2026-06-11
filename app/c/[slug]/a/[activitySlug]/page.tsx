@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
 import { useActivity, ACTIVITY_TYPE_LABEL, activityHasScoring } from '@/lib/use-activity';
 import { NextEventCard, type NextEventNight, type PersonalStatus } from '@/components/NextEventCard';
+import { etToday } from '@/lib/dates';
 
 type LeaderboardRow = {
   user_id: string;
@@ -48,7 +49,7 @@ export default function ActivityOverview() {
   useEffect(() => {
     if (!act.activity || !cb.club) return;
     (async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = etToday();
 
       // Next event in this activity
       const { data: upcomingData } = await supabase

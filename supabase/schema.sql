@@ -813,7 +813,7 @@ grant execute on function public.miles_between(double precision, double precisio
 grant execute on function public.transfer_club_ownership_on_delete(uuid, uuid) to service_role;
 
 -- ============================================================
--- VIEWS (both security_invoker — see migrations 0011 and 0027)
+-- VIEWS (all security_invoker — see migrations 0011, 0027, 0029)
 -- ============================================================
 
 create or replace view public.leaderboard with (security_invoker = true) as
@@ -838,22 +838,11 @@ where u.deleted_at is null
   and a.type = any (array['league'::text, 'tournament'::text])
 group by a.club_id, a.id, u.id, u.name;
 
-create or replace view public.public_events with (security_invoker = true) as
-select
-  e.id, e.club_id, e.activity_id, e.name, e.date, e.start_time,
-  e.city, e.state, e.zip, e.num_tables, e.status, e.created_at,
-  c.slug as club_slug, c.name as club_name,
-  a.slug as activity_slug, a.name as activity_name, a.type as activity_type
-from events e
-join activities a on a.id = e.activity_id
-join clubs c on c.id = e.club_id
-where e.deleted_at is null
-  and a.deleted_at is null
-  and c.deleted_at is null
-  and a.is_public = true
-  and c.is_public = true;
-
-grant select on public.public_events to anon, authenticated;
+-- public_events (0011) was DROPPED in migration 0034: security_invoker +
+-- anon's revoked events grant meant it never worked for logged-out
+-- discovery. Discovery now runs through the service-role client in
+-- app/actions/discovery.ts with explicit filters + redacted projection.
+-- Do not reintroduce a view-based discovery path.
 
 -- player_lifetime_stats: per-player career totals across ALL scoring activity
 -- types (league, tournament, open_play — not class). Distinct from leaderboard,
@@ -934,8 +923,9 @@ alter table public.notification_preferences enable row level security;
 alter table public.legal_acceptances enable row level security;
 alter table public.zip_coordinates enable row level security;
 
--- Anon must not read events directly; the public_events view is the only
--- discovery surface (migration 0011).
+-- Anon must not read events directly (migration 0011). Discovery runs
+-- through the service-role client in app/actions/discovery.ts; the old
+-- public_events view was dropped in migration 0034.
 revoke select on public.events from anon;
 
 -- ============================================================

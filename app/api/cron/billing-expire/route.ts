@@ -40,11 +40,22 @@ export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
-  // Verify the request came from Vercel cron (or our manual test path)
+  // Verify the request came from Vercel cron (or our manual test path).
+  // Mirrors /api/cron/reminders exactly: fail CLOSED when CRON_SECRET is
+  // missing in production. The previous guard (`if (expectedSecret && ...)`)
+  // skipped verification entirely when the secret was unset, leaving trial
+  // downgrades and canceled-sub cleanup publicly triggerable (audit M-1).
   const authHeader = request.headers.get('authorization');
   const expectedSecret = process.env.CRON_SECRET;
-  if (expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (expectedSecret) {
+    if (authHeader !== 'Bearer ' + expectedSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  } else {
+    // No CRON_SECRET in env: fine for local dev, wide open in production.
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'cron not configured' }, { status: 500 });
+    }
   }
 
   const supabase = getServiceSupabase();

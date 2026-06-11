@@ -15,6 +15,7 @@ import { checkCanCreateHiddenEvent } from '@/app/actions/billing-gates';
 import { NumberStepper } from '@/components/NumberStepper';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { etToday } from '@/lib/dates';
 
 type Member = {
   user_id: string;
@@ -69,7 +70,7 @@ export default function ActivityEventsPage() {
 
   // Single-night form state
   const [nightName, setNightName] = useState('');
-  const [nightDate, setNightDate] = useState(new Date().toISOString().slice(0, 10));
+  const [nightDate, setNightDate] = useState(etToday());
   const [nightTime, setNightTime] = useState('19:00');
   const [numTables, setNumTables] = useState(1);
   const [gamesPlanned, setGamesPlanned] = useState(4);
@@ -87,7 +88,7 @@ export default function ActivityEventsPage() {
 
   // Series form state
   const [sName, setSName] = useState('');
-  const [sStartDate, setSStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sStartDate, setSStartDate] = useState(etToday());
   const [sEndDate, setSEndDate] = useState('');
   const [sIntervalWeeks, setSIntervalWeeks] = useState(2);  // every N weeks
   const [sTime, setSTime] = useState('19:00');
@@ -790,7 +791,7 @@ export default function ActivityEventsPage() {
           )}
         </div>
       ) : (() => {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = etToday();
         const isPast = (n: Night) => n.status === 'completed' || n.date < today;
         const upcoming = nights.filter((n) => !isPast(n)).sort((a, b) =>
           a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || '')

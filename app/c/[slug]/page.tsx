@@ -10,6 +10,7 @@ import { ACTIVITY_TYPE_LABEL, type ActivityType, activityHasScoring } from '@/li
 import { NextEventCard, type NextEventNight, type PersonalStatus } from '@/components/NextEventCard';
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { etToday } from '@/lib/dates';
 
 type ActivityCard = {
   id: string;
@@ -66,7 +67,7 @@ export default function ClubOverview() {
     setActivities(acts);
 
     // Next event across all activities in this club
-    const today = new Date().toISOString().slice(0, 10);
+    const today = etToday();
     const { data: gnData } = await supabase
       .from('events')
       .select('id, name, date, start_time, num_tables, games_planned, status, activity_id, host:host_player_id(id, name), tables(assigned)')

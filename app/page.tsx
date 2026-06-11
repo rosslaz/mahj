@@ -16,6 +16,7 @@ import { PullToRefresh } from '@/components/PullToRefresh';
 import NearYou from '@/components/NearYou';
 import { ToastProvider, useToast } from '@/components/Toast';
 import { notifySignupCreated, notifySignupWithdrawn } from '@/app/actions/notifications';
+import { etToday } from '@/lib/dates';
 
 type ClubCard = {
   id: string;
@@ -86,7 +87,7 @@ function HomePageInner() {
       const clubIds = myClubs.map((c) => c.id);
 
       // -------- Upcoming events across all clubs --------
-      const today = new Date().toISOString().slice(0, 10);
+      const today = etToday();
       let allUpcoming: UpcomingEventWithCtx[] = [];
       if (clubIds.length > 0) {
         const { data: gnData } = await supabase

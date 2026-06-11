@@ -2,6 +2,7 @@
 
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { getServiceSupabase } from '@/lib/supabase-service';
+import { etToday } from '@/lib/dates';
 
 export type NearbyEventType = 'all' | 'league' | 'tournament' | 'class' | 'open_play';
 
@@ -111,7 +112,7 @@ export async function findNearbyEvents(opts: {
     // not-deleted/normal-visibility filters explicitly, returning only
     // redacted fields (no street) to the client.
     const supabase = getServiceSupabase();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = etToday();
 
     const { data: rawEvents, error: queryErr } = await supabase
       .from('events')
@@ -274,7 +275,7 @@ export async function findNearbyClubs(opts: {
 
     // 5. Upcoming public events per club (within 60 days, on public activities).
     //    Single query, count app-side.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = etToday();
     const inSixtyDays = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10);
