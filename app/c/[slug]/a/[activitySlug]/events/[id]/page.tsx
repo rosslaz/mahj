@@ -1429,7 +1429,7 @@ function SwapPlayerModal({
 
 // ============================================================
 function ScoreEntryModal({
-  gameId, clubId, tableSeats, gpws, members, existingScores, confirm, toast, onClose, onSaved,
+  gameId, tableSeats, gpws, members, existingScores, confirm, toast, onClose, onSaved,
 }: {
   gameId: string; clubId: string; tableSeats: Seat[]; gpws: GPW[]; members: Member[];
   existingScores: Score[];
@@ -1487,25 +1487,21 @@ function ScoreEntryModal({
 
     setSaving(true);
     try {
-      // Wipe existing scores for this game and re-insert under the current model.
-      // Scores are keyed by club_id (the 0010 rebuild renamed league_id → club_id);
-      // club_id is passed in from the parent rather than re-resolved here.
-      await supabase.from('game_scores').delete().eq('game_id', gameId);
-
-      const payload = playingPlayers.map(({ seat }) => {
-        const isWinner = outcome === 'winner' && seat.player_id === winnerId;
-        const points = isWinner ? parseInt(pointsStr, 10) : 0;
-        return {
-          club_id: clubId,
-          game_id: gameId,
-          player_id: seat.player_id,
-          points,
-          is_winner: isWinner,
-        };
+      // Transactional save via the save_game_result RPC (migration 0035).
+      // The old client-side delete → insert → update could destroy the
+      // previous result if the network dropped mid-sequence (a completed
+      // game with zero score rows reads as a Wall), and the ignored delete
+      // errors meant non-admin members editing a result hit a cryptic
+      // unique-constraint failure. The RPC does the whole wipe-and-rewrite
+      // in one transaction and derives the playing set server-side; any
+      // failure leaves the prior result untouched.
+      const { error: rpcErr } = await supabase.rpc('save_game_result', {
+        p_game_id: gameId,
+        p_outcome: outcome,
+        p_winner_player_id: outcome === 'winner' ? winnerId : null,
+        p_points: outcome === 'winner' ? parseInt(pointsStr, 10) : 0,
       });
-      const { error: insErr } = await supabase.from('game_scores').insert(payload);
-      if (insErr) throw insErr;
-      await supabase.from('games').update({ status: 'completed' }).eq('id', gameId);
+      if (rpcErr) throw rpcErr;
       onSaved();
     } catch (e: any) {
       setError(e.message);
@@ -1521,8 +1517,13 @@ function ScoreEntryModal({
       tone: 'danger',
     });
     if (!ok) return;
-    await supabase.from('game_scores').delete().eq('game_id', gameId);
-    await supabase.from('games').update({ status: 'pending' }).eq('id', gameId);
+    // Same RPC, 'clear' outcome — transactional, and unlike the old
+    // fire-and-forget deletes, failures actually surface.
+    const { error: rpcErr } = await supabase.rpc('save_game_result', {
+      p_game_id: gameId,
+      p_outcome: 'clear',
+    });
+    if (rpcErr) { toast(rpcErr.message, 'error'); return; }
     onSaved();
   }
 
