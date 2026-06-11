@@ -128,7 +128,7 @@ function EventDetailPageInner() {
     setLoading(true);
 
     const [nightRes, tablesRes, signupsRes, membersRes, invitesRes, subRes] = await Promise.all([
-      supabase.from('events').select('*').eq('id', id).eq('club_id', cb.club.id).single(),
+      supabase.from('events').select('*').eq('id', id).eq('club_id', cb.club.id).maybeSingle(),
       supabase.from('tables').select('*').eq('event_id', id).order('table_number'),
       supabase.from('night_signups').select('id, player_id, status, created_at, invited_at').eq('event_id', id),
       supabase.from('club_members')
@@ -157,6 +157,23 @@ function EventDetailPageInner() {
     );
     setIsPro(!!pro);
 
+    // Event fetch outcomes (maybeSingle): data=null with NO error means the
+    // event genuinely isn't visible to us — deleted, hidden + not invited,
+    // or a bad URL — so show the not-found state. A non-null error means the
+    // REQUEST failed (e.g. a network blip when useRefreshOnFocus re-runs
+    // load on tab focus); keep the state we already have instead of nuking
+    // the page mid-session. Previously .single() conflated both cases into
+    // an error and the page fell to "not found" on any transient failure.
+    if (nightRes.error) {
+      console.error('Event fetch error:', nightRes.error);
+      setLoading(false);
+      return;
+    }
+    if (!nightRes.data) {
+      setNight(null);
+      setLoading(false);
+      return;
+    }
     setNight(nightRes.data as unknown as Night);
     setTables((tablesRes.data as Table[]) || []);
     setSignups((signupsRes.data as Signup[]) || []);

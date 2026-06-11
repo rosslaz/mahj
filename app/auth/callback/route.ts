@@ -8,7 +8,20 @@ import { cookies } from 'next/headers';
 //     established client-side by supabase.auth.verifyOtp. No code to
 //     exchange, just need to do the users-row provisioning.
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const reqUrl = new URL(request.url);
+  const { searchParams } = reqUrl;
+  // Canonical origin for every redirect below. Behind Vercel's proxy,
+  // request.url can carry the internal deployment host (*.vercel.app)
+  // rather than the domain the user is actually on; redirecting there sets
+  // the auth cookies on the wrong host and the user lands "signed out".
+  // x-forwarded-host/-proto preserve the original request's host; raw
+  // request.url remains the fallback for local dev. (Same bug class as the
+  // signout-route fix.)
+  const fwdHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const fwdProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const origin = fwdHost
+    ? (fwdProto || 'https') + '://' + fwdHost
+    : reqUrl.origin;
   const code = searchParams.get('code');
   const fromOtp = searchParams.get('from') === 'otp';
   const next = searchParams.get('next') ?? '/';
