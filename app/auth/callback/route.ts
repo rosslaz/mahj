@@ -58,39 +58,24 @@ export async function GET(request: NextRequest) {
     // OTP flow without a valid session = something went wrong client-side.
     return NextResponse.redirect(`${origin}/sign-in?error=no-session`);
   }
-  const email = user.email.toLowerCase();
 
-  // Step 1: try to link an existing users row (or confirm one is already
-  // linked). The link_auth_to_user RPC is SECURITY DEFINER so it bypasses
-  // RLS to find rows by email and stamp auth_user_id when missing. Returns
-  // the users.id if a row exists (now linked), or null if no row exists.
-  const { data: linkedId } = await supabase.rpc('link_auth_to_user');
+  // Step 1: provision (or fetch) the caller's users row via a SECURITY DEFINER
+  // RPC. This handles all three cases safely without tripping the users_insert
+  // RLS policy (which rejected the old direct insert with 42501 for brand-new
+  // accounts — see migration 0032):
+  //   - already linked  → returns (id, created=false)
+  //   - exists by email → links it, returns (id, created=false)
+  //   - brand new       → inserts it, returns (id, created=true)
+  const { data: provisioned, error: provErr } = await supabase
+    .rpc('provision_user_row')
+    .single();
 
-  let userRowId: string | null = (linkedId as string | null) ?? null;
-  let needsProfile = false;
-
-  if (!userRowId) {
-    // No users row for this email — create one. RLS allows insert when
-    // auth_user_id = auth.uid(), so a regular insert works here.
-    const placeholderName = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    const { data: created, error: insErr } = await supabase
-      .from('users')
-      .insert({
-        auth_user_id: user.id,
-        email,
-        name: placeholderName,
-      })
-      .select('id')
-      .single();
-    if (insErr) {
-      console.error('User insert error:', insErr);
-      return NextResponse.redirect(`${origin}/sign-in?error=user-create`);
-    }
-    userRowId = (created as any).id;
-    needsProfile = true;
+  if (provErr || !provisioned) {
+    console.error('provision_user_row error:', provErr);
+    return NextResponse.redirect(`${origin}/sign-in?error=user-create`);
   }
 
-  void userRowId;  // tracked for completeness; not used further here
+  const needsProfile = (provisioned as any).created === true;
 
   const destination = needsProfile ? '/profile?welcome=1' : next;
   return NextResponse.redirect(`${origin}${destination}`);
