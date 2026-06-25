@@ -2,9 +2,15 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0031. This file is the source
+-- reflecting the end state of migrations 0002–0035. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
+--
+-- KNOWN DRIFT (fix by re-dumping, per the ritual): this file is hand-maintained
+-- and the FUNCTIONS section is missing `provision_user_row()` (migration 0032)
+-- — it exists and is correct in the live DB and is referenced in the grants
+-- comment below, but its body wasn't re-added here (the edit tool mangles the
+-- dollar-quote delimiters). Regenerate this file from the live DB to resolve.
 --
 -- Regenerate this file (don't hand-edit) after applying new migrations, by
 -- re-dumping structure from the live DB. Migrations remain the change log;

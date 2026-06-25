@@ -277,8 +277,11 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
     `checkCanSendEmailInvites` (billing-gates.ts); `sendPushToUsers` (push-server.ts);
     `formatTime`, `WIND_ORDER` (game-utils.ts); `formatAddress` (address.ts). Pure
     hygiene, no behavior change.
-  - **L-3:** `readme.md.old` sitting in the repo root — fold anything still useful
-    into this file, then delete.
+  - **L-3:** `readme.md.old` in the repo root — its content is the stale v2.1
+    README text, identical to the `README.md` already folded into this file's
+    "Setup from scratch" + "Routes" sections (and that one's deleted). Nothing
+    left to salvage; just delete it: `Remove-Item readme.md.old`. (Claude's
+    Filesystem connector has no delete tool, so this is a manual step.)
 - **UX-audit leftovers** (see `UX_AUDIT_2026-06-11.md`; U-1 through U-9 fixed
   2026-06-11, including the contrast/touch-target sweep, refresh-flash fix, score
   RPC, styled admin dialogs, and join-code share):
