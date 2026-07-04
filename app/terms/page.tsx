@@ -106,9 +106,27 @@ export default function TermsPage() {
         Our handling of personal information is described in our <Link href="/privacy" className="text-jade underline">Privacy Policy</Link>. By using the Service, you acknowledge that you have read and understood the Privacy Policy.
       </p>
 
-      <h2 className="font-display text-2xl mt-8">10. Future paid features</h2>
+      <h2 className="font-display text-2xl mt-8">10. Plans, billing, and subscriptions</h2>
       <p>
-        The Service is currently free. We may introduce paid features, subscriptions, or tiers in the future. If we do, we will provide notice and you may decline to pay; declining means you may lose access to the paid features but will retain access to the free tier (if any) on terms we then publish. Any payment terms, refund policies, and billing provisions for paid features will be presented at the time you sign up for them and will become part of these Terms by reference.
+        Pungctual offers a free tier and a paid per-club subscription (&quot;Pro&quot;). Current pricing is shown in the Service; at the time of writing, Pro is US$9 per month or US$90 per year, per club. Prices are in U.S. dollars and, unless stated otherwise, exclusive of any applicable taxes, which are your responsibility.
+      </p>
+      <p>
+        <strong>Trials.</strong> New clubs may be offered a free Pro trial (currently 14 days, or longer during promotional periods). Each person receives at most one trial, applied to the first club they create; additional clubs start on the free tier. No payment method is required for a trial. If a trial ends without a subscription, the club moves to the free tier.
+      </p>
+      <p>
+        <strong>Payment processing.</strong> Payments are processed by Stripe, Inc. We never see or store your card details. By subscribing, you authorize recurring charges to your payment method and agree to any Stripe terms that apply to the payment.
+      </p>
+      <p>
+        <strong>Automatic renewal and cancellation.</strong> Subscriptions renew automatically at the end of each billing period (monthly or annual) until canceled. You can cancel at any time from your club&apos;s billing page; cancellation takes effect at the end of the current billing period, and the club keeps Pro access through the period already paid.
+      </p>
+      <p>
+        <strong>Refunds.</strong> Except where required by law, payments are non-refundable, and we do not provide refunds or credits for partial billing periods, downgrades, or unused time. Deleting a club cancels its subscription immediately, without a refund for the remainder of the period. Transferring club ownership sets the existing subscription to cancel at the end of the paid period — the departing owner is not charged again, the club keeps Pro through that period, and the new owner may start their own subscription.
+      </p>
+      <p>
+        <strong>Failed payments and downgrades.</strong> If a renewal payment fails, Stripe retries it over several days and Pro access continues during that grace period; if payment cannot be completed, the club moves to the free tier. Moving to the free tier does not delete anything — existing members, activities, and history remain — but actions beyond the free tier&apos;s limits (such as adding members, activities, or admins beyond the free caps, creating hidden events, or sending email invitations) are unavailable unless the club is upgraded again.
+      </p>
+      <p>
+        <strong>Price changes.</strong> We may change subscription pricing. Price changes take effect no earlier than your next renewal after we provide notice (through the Service or by email). If you do not agree to a price change, cancel before it takes effect.
       </p>
 
       <h2 className="font-display text-2xl mt-8">11. Changes to the Service</h2>

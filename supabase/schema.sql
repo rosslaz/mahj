@@ -2,11 +2,15 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0037. This file is the source
+-- reflecting the end state of migrations 0002–0038. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
--- Last synced 2026-07-04 (second pass, after 0037): event_invites_delete
+-- Last synced 2026-07-04 (third pass, after 0038): enforce_free_tier_admin_cap
+-- trigger fn + trigger added, verified against the live catalogs and
+-- exercised with a rolled-back live test.
+--
+-- Second pass same day (after 0037): event_invites_delete
 -- policy added, verified against the live pg_policies catalog.
 --
 -- Earlier same-day sync: function bodies for provision_user_row() and
@@ -990,6 +994,55 @@ begin
 end;
 $$;
 
+create or replace function public.enforce_free_tier_admin_cap()
+  returns trigger language plpgsql security definer set search_path to 'public', 'pg_catalog'
+as $$
+declare
+  v_has_sub boolean;
+  v_count int;
+begin
+  -- Only transitions INTO 'admin' are gated (soft-downgrade: existing
+  -- over-cap admin sets persist; only new promotions are blocked).
+  if NEW.role <> 'admin' then
+    return NEW;
+  end if;
+  if TG_OP = 'UPDATE' then
+    if OLD.role = 'admin' then
+      return NEW;
+    end if;
+    -- Ownership-transfer demotion (owner->admin): the paired admin->owner
+    -- promotion in the same transaction keeps net admin count invariant,
+    -- and 'owner' is unreachable except via the transfer RPCs. (0038)
+    if OLD.role = 'owner' then
+      return NEW;
+    end if;
+  end if;
+
+  select exists (select 1 from club_subscriptions where club_id = NEW.club_id) into v_has_sub;
+  if not v_has_sub then
+    return NEW;
+  end if;
+
+  if club_is_pro(NEW.club_id) then
+    return NEW;
+  end if;
+
+  -- Same lock key as the member-cap trigger: one lock domain per club's
+  -- membership table (0031 race-safe pattern).
+  perform pg_advisory_xact_lock(hashtext('club_members:' || NEW.club_id::text));
+
+  select count(*) into v_count
+  from club_members
+  where club_id = NEW.club_id and role = 'admin';
+
+  if v_count >= 1 then
+    raise exception 'Free clubs are limited to 1 admin. Upgrade to Pro for unlimited admins.' using errcode = 'check_violation';
+  end if;
+
+  return NEW;
+end;
+$$;
+
 create or replace function public.enforce_free_tier_hidden_event()
   returns trigger language plpgsql security definer set search_path to 'public', 'pg_catalog'
 as $$
@@ -1120,6 +1173,11 @@ create trigger trg_enforce_free_tier_hidden_event_update
 drop trigger if exists trg_enforce_free_tier_member_cap on public.club_members;
 create trigger trg_enforce_free_tier_member_cap before insert on public.club_members
   for each row execute function enforce_free_tier_member_cap();
+
+drop trigger if exists trg_enforce_free_tier_admin_cap on public.club_members;
+create trigger trg_enforce_free_tier_admin_cap
+  before insert or update of role on public.club_members
+  for each row execute function enforce_free_tier_admin_cap();
 
 -- ============================================================
 -- ROW LEVEL SECURITY

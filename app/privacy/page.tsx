@@ -37,6 +37,7 @@ export default function PrivacyPage() {
         <li><strong>Club and event information</strong>: club names, event dates, locations (including street addresses for events you host or attend), and other details you enter.</li>
         <li><strong>Game results</strong>: scores, wins, and statistics you record through the Service.</li>
         <li><strong>Notification preferences</strong>: your choices about push notifications and which devices receive them.</li>
+        <li><strong>Subscription information</strong>: your club&apos;s plan, subscription status, and billing period dates. Payment card details go directly to Stripe and are never seen or stored by us.</li>
         <li><strong>Communications</strong>: messages you send to us, such as support inquiries.</li>
       </ul>
 
@@ -77,7 +78,10 @@ export default function PrivacyPage() {
 
       <h3 className="font-display text-xl mt-4">With other users</h3>
       <p>
-        Other members of clubs and events you participate in can see your name, basic profile details, your participation in events, and your game results. Event addresses are visible to approved attendees of those events. Email addresses, phone numbers, and home addresses are not displayed to other users unless you choose to enter them in places visible to others.
+        Members of a club you join can see your name, your email address, and any phone number or address you add to your profile, on that club&apos;s member roster — clubs use this to coordinate hosting and rides. They can also see your participation in events and your game results. Add optional contact details to your profile only if you are comfortable with fellow club members seeing them.
+      </p>
+      <p>
+        Event street addresses are visible to members of the hosting club and to attendees the host has approved. Public discovery of clubs and events shows only city, state, and approximate distance — never street addresses or personal contact details.
       </p>
 
       <h3 className="font-display text-xl mt-4">With service providers</h3>
@@ -87,8 +91,8 @@ export default function PrivacyPage() {
       <ul className="list-disc list-inside space-y-1">
         <li><strong>Supabase, Inc.</strong> — database hosting and authentication</li>
         <li><strong>Vercel Inc.</strong> — application hosting</li>
+        <li><strong>Stripe, Inc.</strong> — payment processing for Pro subscriptions</li>
         <li><strong>Resend, Inc.</strong> — transactional email delivery</li>
-        <li><strong>Functional Software, Inc. (Sentry)</strong> — error monitoring</li>
         <li><strong>Google LLC</strong> — push notification delivery (Android), email delivery infrastructure</li>
         <li><strong>Apple Inc.</strong> — push notification delivery (iOS)</li>
       </ul>
@@ -173,9 +177,12 @@ export default function PrivacyPage() {
         If we become aware of a security incident affecting your information, we will notify you in accordance with applicable law.
       </p>
 
-      <h2 className="font-display text-2xl mt-8">11. Future paid features</h2>
+      <h2 className="font-display text-2xl mt-8">11. Payments and billing information</h2>
       <p>
-        The Service is currently free. If we introduce paid features in the future, we may collect billing information (such as payment card details) through a payment processor. We will update this Privacy Policy at that time to describe how billing information is handled.
+        Pro subscriptions are billed through Stripe, Inc. When you subscribe, your payment card details go directly to Stripe and are never seen or stored by us. Stripe&apos;s handling of your payment information is described in Stripe&apos;s own privacy policy.
+      </p>
+      <p>
+        We store what we need to operate your subscription: your club&apos;s plan and subscription status, billing period and trial dates, and Stripe identifiers (such as customer and subscription IDs) that link your club to its Stripe records. Billing receipts and payment-failure notices may be sent by Stripe on our behalf.
       </p>
 
       <h2 className="font-display text-2xl mt-8">12. Changes to this Policy</h2>

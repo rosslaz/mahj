@@ -116,7 +116,7 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
 - Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
-  baseline + migrations through **0037**). Regenerate it (don't hand-edit) after
+  baseline + migrations through **0038**). Regenerate it (don't hand-edit) after
   applying new migrations, and bump the migration number on this line to match the
   highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →
@@ -244,6 +244,33 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 ---
 
 ## Current status / open items
+
+- **Legal docs + admin-cap backstop shipped 2026-07-04** (2026-07 audit items
+  #4 + #7):
+  - **#4:** Terms §10 and Privacy §11 claimed "the Service is currently free"
+    while Stripe LIVE billing ran. Terms §10 is now real billing terms (Pro
+    pricing, one-per-user trials, Stripe processing, auto-renewal,
+    cancel-at-period-end, no refunds, club-delete = immediate cancel,
+    transfer = wind-down at period end, failed-payment grace, soft
+    downgrade, price-change notice). Privacy: §11 now describes what billing
+    data we hold (Stripe IDs, plan/status/dates — never card details), §4
+    accurately states the member roster shows profile email/phone/address
+    to fellow club members (the old text denied this), Stripe added to the
+    processor list, Sentry removed from it (audit #22's doc half — Sentry
+    is out of the stack). LEGAL_VERSIONS terms+privacy bumped 1.0 → 2.0
+    (AUP stays 1.0): on next deploy EVERY existing user gets a one-time
+    re-accept prompt — expected, tell Cecilia's testers. Still
+    pre-lawyer-review (footers say so).
+  - **#7:** migration 0038 (`enforce_free_tier_admin_cap` trigger) applied to
+    the live DB 2026-07-04 via the Supabase MCP — DB backstop for the
+    1-admin free cap, mirroring the 0031 race-safe pattern (advisory lock,
+    check_violation, no-sub-row pass-through). Gates only transitions INTO
+    'admin'; exempts owner→admin demotions so ownership transfers work even
+    on legacy over-cap free clubs (net count invariant — see migration
+    comments). Verified with a rolled-back live test (2nd admin blocked,
+    promotion at cap blocked, transfer demotion allowed; zero scratch rows
+    left). Enforced in production immediately; the repo migration file is
+    the record.
 
 - **Public-event discovery + invite-cancel fixes shipped 2026-07-04** (2026-07
   audit items #2 + #5; migration 0037 applied to the live DB same day via the
