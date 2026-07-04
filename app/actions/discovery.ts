@@ -317,6 +317,118 @@ export async function findNearbyClubs(opts: {
   }
 }
 
+export type PublicEventPreview = {
+  id: string;
+  club_id: string;
+  name: string;
+  date: string;
+  start_time: string | null;
+  city: string | null;
+  state: string | null;
+  host_player_id: string | null;
+  host_name: string | null;
+  num_tables: number;
+  games_planned: number;
+  approved_count: number;
+};
+
+/**
+ * Redacted single-event preview for signed-in NON-MEMBERS (2026-07 audit #2).
+ *
+ * The Near You cards link to /c/[slug]/a/[activitySlug]/events/[id], but
+ * events_select has no public arm, so a non-member's direct fetch returns
+ * nothing and the page dead-ended at "Game night not found" — the whole
+ * 0011 request-to-join flow (pending signups, host approval, street reveal
+ * on approval) was unreachable.
+ *
+ * Deliberately fixed HERE, not with an RLS public arm: the events row
+ * carries the host's street address, and a public select arm would expose
+ * it to any signed-in user via the API, bypassing all three of the app's
+ * street-redaction mechanisms. Same service-role + explicit-public-filters
+ * + redacted-fields pattern as findNearbyEvents above. Street is never
+ * included; it becomes visible through the normal approved-signup RLS arm
+ * once the host approves.
+ *
+ * Returns data: null (not an error) when the event isn't a live public
+ * event — the page shows its regular not-found state.
+ */
+export async function getPublicEventPreview(
+  eventId: string,
+): Promise<Result<PublicEventPreview | null>> {
+  try {
+    const userId = await getCallerUserId();
+    if (!userId) return { ok: false, error: 'Not signed in.' };
+
+    const supabase = getServiceSupabase();
+
+    const { data: row, error: queryErr } = await supabase
+      .from('events')
+      .select(`
+        id, name, date, start_time, city, state, host_player_id,
+        num_tables, games_planned, club_id,
+        club:club_id (id, is_public, deleted_at),
+        activity:activity_id (id, is_public, deleted_at)
+      `)
+      .eq('id', eventId)
+      .eq('status', 'active')
+      .eq('visibility', 'normal')
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (queryErr) return { ok: false, error: queryErr.message };
+
+    const e = row as any;
+    if (
+      !e ||
+      !e.club?.is_public || e.club.deleted_at ||
+      !e.activity?.is_public || e.activity.deleted_at
+    ) {
+      return { ok: true, data: null };
+    }
+
+    // Host display name — the viewer can't read the roster themselves.
+    let hostName: string | null = null;
+    if (e.host_player_id) {
+      const { data: hostRow } = await supabase
+        .from('users')
+        .select('name, deleted_at')
+        .eq('id', e.host_player_id)
+        .maybeSingle();
+      if (hostRow && !(hostRow as any).deleted_at) {
+        hostName = ((hostRow as any).name as string) ?? null;
+      }
+    }
+
+    // Approved-signup count — night_signups select only shows non-members
+    // their own rows, so the page can't compute this itself.
+    const { count } = await supabase
+      .from('night_signups')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .eq('status', 'approved');
+
+    return {
+      ok: true,
+      data: {
+        id: e.id,
+        club_id: e.club_id,
+        name: e.name,
+        date: e.date,
+        start_time: e.start_time,
+        city: e.city,
+        state: e.state,
+        host_player_id: e.host_player_id,
+        host_name: hostName,
+        num_tables: e.num_tables,
+        games_planned: e.games_planned,
+        approved_count: count ?? 0,
+      },
+    };
+  } catch (err: any) {
+    console.error('[getPublicEventPreview] unexpected error:', err);
+    return { ok: false, error: err?.message || 'Unexpected error loading event preview.' };
+  }
+}
+
 // Bucket member counts into privacy-friendly ranges
 function bucketMemberCount(n: number): ClubMemberRange {
   if (n <= 9) return 'small';

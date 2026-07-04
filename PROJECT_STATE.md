@@ -116,7 +116,7 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
 - Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
-  baseline + migrations through **0036**). Regenerate it (don't hand-edit) after
+  baseline + migrations through **0037**). Regenerate it (don't hand-edit) after
   applying new migrations, and bump the migration number on this line to match the
   highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →
@@ -244,6 +244,32 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 ---
 
 ## Current status / open items
+
+- **Public-event discovery + invite-cancel fixes shipped 2026-07-04** (2026-07
+  audit items #2 + #5; migration 0037 applied to the live DB same day via the
+  Supabase MCP and verified — the cancel-invitation fix was live in production
+  the moment the policy landed, since the deployed code path was already
+  correct):
+  - **#5:** `event_invites` never had a DELETE policy, so `cancelEventInvitation`
+    deleted 0 rows and reported success. 0037 adds
+    `event_invites_delete using (can_manage_event(event_id))` (owner/admin/host —
+    matches the INSERT policy; invitees decline via UPDATE). The action now also
+    does `.select('id')` on the delete and errors on 0 rows, so any recurrence
+    of a silent no-op is loud.
+  - **#2:** signed-in non-members clicking a Near You event hit "Game night not
+    found" — `events_select` has no public arm, so the entire 0011
+    request-to-join flow was unreachable. Fixed with `getPublicEventPreview`
+    (discovery.ts): a service-role, street-REDACTED single-event preview the
+    event page falls back to when the direct fetch returns null.
+    **Deliberately NOT an RLS public arm** — the events row carries the host's
+    street address, and a public select arm would expose it to any signed-in
+    user via the API, bypassing all three street-redaction mechanisms. Street
+    becomes visible through the existing approved-signup RLS arm once the host
+    approves, which is the designed reveal moment. Preview shows host name +
+    approved count (service-role) since non-members can't read the roster.
+  - Verify with a non-member test account: Near You → public event → preview
+    renders with Request to join → request shows pending → host approves →
+    full page incl. street appears.
 
 - **Billing lifecycle fixes shipped 2026-07-03/04** (2026-07 audit items #1 + #3;
   deployed in v2.22.1; migration 0036 (`transfer_club_ownership` RPC) applied to

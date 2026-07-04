@@ -21,6 +21,7 @@ import {
 } from '@/app/actions/notifications';
 import { sendEventReminderNow } from '@/app/actions/reminders';
 import { sendCalendarInvites } from '@/app/actions/send-invites';
+import { getPublicEventPreview } from '@/app/actions/discovery';
 import {
   sendEventInvitations,
   acceptEventInvitation,
@@ -112,6 +113,12 @@ function EventDetailPageInner() {
   // Event invitations (for hidden events). Loaded for everyone but the UI
   // only acts on them when relevant (banner for pending invitees; manage
   // section for admins/host).
+  // Public-event preview (2026-07 audit #2): set when the caller can't see
+  // the event via RLS but it IS a public event — i.e. a signed-in NON-MEMBER
+  // arriving from Near You. Holds the one number the viewer can't query
+  // themselves (approved count; night_signups select only shows them their
+  // own rows). Cleared whenever the direct fetch succeeds.
+  const [previewMeta, setPreviewMeta] = useState<{ approvedCount: number } | null>(null);
   const [eventInvites, setEventInvites] = useState<EventInvite[]>([]);
   // Spinner states for invitation actions
   const [respondingToInvite, setRespondingToInvite] = useState(false);
@@ -170,10 +177,57 @@ function EventDetailPageInner() {
       return;
     }
     if (!nightRes.data) {
+      // Not visible under RLS. For a signed-in NON-MEMBER this is the normal
+      // state for a public event — events_select deliberately has no public
+      // arm, because the row carries the host's street address, which is
+      // only revealed once the host approves a signup. Instead, fall back to
+      // a service-role, street-redacted preview (same pattern as Near You
+      // discovery) so the Near You → event → "Request to join" funnel works.
+      // Once the host approves, the approved-signup RLS arm makes the direct
+      // fetch succeed and this preview path stops firing.
+      const prev = await getPublicEventPreview(id);
+      if (prev.ok && prev.data) {
+        const p = prev.data;
+        setNight({
+          id: p.id,
+          club_id: p.club_id,
+          name: p.name,
+          date: p.date,
+          start_time: p.start_time,
+          street: null,  // withheld until the host approves the signup
+          city: p.city,
+          state: p.state,
+          zip: null,
+          host_player_id: p.host_player_id,
+          num_tables: p.num_tables,
+          games_planned: p.games_planned,
+          status: 'active',
+          visibility: 'normal',
+        });
+        // Roster is invisible to the viewer, so synthesize the host entry
+        // for the "Hosted by ..." line from the preview payload.
+        setHost(
+          p.host_player_id
+            ? { user_id: p.host_player_id, name: p.host_name || '—', street: null, city: null, state: null, zip: null }
+            : null
+        );
+        setPreviewMeta({ approvedCount: p.approved_count });
+        // Own signup rows ARE visible (night_signups select has a
+        // player_id = current_user_id() arm), so a pending request-to-join
+        // renders its "awaiting approval" state correctly.
+        setSignups((signupsRes.data as Signup[]) || []);
+        setTables([]);
+        setMembers([]);
+        setEventInvites([]);
+        setSeats([]); setGames([]); setScores({}); setGpws({});
+        setLoading(false);
+        return;
+      }
       setNight(null);
       setLoading(false);
       return;
     }
+    setPreviewMeta(null);
     setNight(nightRes.data as unknown as Night);
     setTables((tablesRes.data as Table[]) || []);
     setSignups((signupsRes.data as Signup[]) || []);
@@ -293,6 +347,9 @@ function EventDetailPageInner() {
   const capacityMax = night.num_tables * 5;
   // Capacity check uses approved only — pending signups don't reserve seats.
   const approvedCount = approvedSignups.length;
+  // In preview mode the viewer can't read others' signups, so the true
+  // approved count comes from the service-role preview instead.
+  const displayApprovedCount = previewMeta ? previewMeta.approvedCount : approvedCount;
 
   // --- ACTIONS ---
 
@@ -804,7 +861,7 @@ function EventDetailPageInner() {
           <div>
             <h2 className="font-display text-3xl">Signed Up</h2>
             <p className="text-sm text-ink/65 italic mt-1">
-              {approvedCount} / {capacityMax} · need {capacityMin} to play
+              {displayApprovedCount} / {capacityMax} · need {capacityMin} to play
               {pendingSignups.length > 0 && (
                 <> · <span className="text-cinnabar">{pendingSignups.length} pending approval</span></>
               )}
@@ -891,7 +948,13 @@ function EventDetailPageInner() {
           </div>
         )}
 
-        {approvedSignups.length === 0 ? (
+        {previewMeta ? (
+          <p className="text-ink/60 italic">
+            {displayApprovedCount === 0
+              ? "No one's signed up yet."
+              : 'Attendee names are visible to club members and approved attendees.'}
+          </p>
+        ) : approvedSignups.length === 0 ? (
           <p className="text-ink/60 italic">No one's signed up yet.</p>
         ) : (
           <div className="flex flex-wrap gap-2">

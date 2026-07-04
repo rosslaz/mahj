@@ -384,14 +384,27 @@ export async function cancelEventInvitation(inviteId: string): Promise<Result> {
   if (!userId) return { ok: false, error: 'Not signed in.' };
 
   const supabase = getSupabase();
-  // RLS handles authz — admins/host can update, others can't.
+  // RLS handles authz: event_invites_delete (migration 0037) allows
+  // can_manage_event(event_id) — club owner/admin or the event host.
   // Cancel = delete the row entirely (cleaner than a 4th status value).
-  const { error } = await supabase
+  //
+  // The .select('id') matters: under RLS, an unauthorized or non-matching
+  // DELETE affects 0 rows WITHOUT erroring. Before 0037 this function
+  // reported success for months while deleting nothing (audit #5); the
+  // row-count check makes any recurrence loud instead of silent.
+  const { data: deleted, error } = await supabase
     .from('event_invites')
     .delete()
     .eq('id', inviteId)
-    .eq('status', 'pending');  // only cancellable while pending
+    .eq('status', 'pending')  // only cancellable while pending
+    .select('id');
   if (error) return { ok: false, error: error.message };
+  if (!deleted || deleted.length === 0) {
+    return {
+      ok: false,
+      error: 'Invitation not found, already responded to, or you do not have permission to cancel it.',
+    };
+  }
   return { ok: true };
 }
 
@@ -503,3 +516,4 @@ async function sendOutsideInviteEmail(opts: {
     throw new Error(`Resend ${res.status}: ${errBody}`);
   }
 }
+

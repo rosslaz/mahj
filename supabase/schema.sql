@@ -2,11 +2,14 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0036. This file is the source
+-- reflecting the end state of migrations 0002–0037. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
--- Last synced 2026-07-04: function bodies for provision_user_row() and
+-- Last synced 2026-07-04 (second pass, after 0037): event_invites_delete
+-- policy added, verified against the live pg_policies catalog.
+--
+-- Earlier same-day sync: function bodies for provision_user_row() and
 -- transfer_club_ownership() pulled verbatim from the live DB
 -- (pg_get_functiondef), and the full object inventory (tables, views,
 -- triggers, policies, functions) diffed against the live catalogs — no
@@ -1190,6 +1193,10 @@ create policy events_delete on public.events for delete to public using (is_club
 create policy event_invites_select on public.event_invites for select to public using (((invitee_user_id = current_user_id()) or can_manage_event(event_id)));
 create policy event_invites_insert on public.event_invites for insert to public with check (can_manage_event(event_id));
 create policy event_invites_update on public.event_invites for update to public using (((invitee_user_id = current_user_id()) or can_manage_event(event_id)));
+-- DELETE added in 0037 (audit #5): before it, cancelEventInvitation's
+-- user-session delete matched zero rows without erroring. Sender-side
+-- cancel only (owner/admin/host); invitees decline via the UPDATE policy.
+create policy event_invites_delete on public.event_invites for delete to public using (can_manage_event(event_id));
 
 -- night_signups
 create policy night_signups_select on public.night_signups for select to public using ((is_club_member(club_id, 'member'::text) or (player_id = current_user_id())));
