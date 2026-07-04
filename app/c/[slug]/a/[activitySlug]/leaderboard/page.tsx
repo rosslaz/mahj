@@ -36,6 +36,10 @@ export default function ActivityLeaderboardPage() {
         .from('leaderboard')
         .select('*')
         .eq('activity_id', act.activity!.id)
+        // Audit #21: members with zero scored games aren't standings — they
+        // pad the bottom of the table with 0/0/0 rows. Filter here rather
+        // than in the view so a "full roster" mode stays possible later.
+        .gt('games_played', 0)
         .order('total_points', { ascending: false })
         .order('total_wins', { ascending: false });
       if (error) setErr(error.message);

@@ -245,6 +245,29 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Current status / open items
 
+- **Release 1 of the low tier shipped 2026-07-04** (audit #13, #15 partial,
+  #16, #21):
+  - **#13:** `app/auth/signout/route.ts` DELETED entirely — zero references
+    anywhere in the codebase (UserMenu signs out client-side; the browser
+    client owns its cookies). Went beyond the audit's "or keep POST-only":
+    the POST handler had no callers either.
+  - **#15 (partial):** InlineConfirm two-steps replace native confirm() in
+    ClubInvitesPanel (revoke) and NotificationsPanel (remove device); club
+    settings transfer is now an inline armed confirm with the billing note,
+    and a billing wind-down warning STAYS ON PAGE instead of an alert that
+    vanished then navigated away; transfer/delete errors render in their own
+    sections (previously misrouted to the Basics form slot or alert()s);
+    activity-settings delete error inline; billing page's 3 alert()s →
+    inline actionError (beyond the audit list, found while in the file).
+    REMAINING for the sweep: profile's confirm() — it lives inside the dead
+    email-change branch that Release 3 deletes wholesale; don't sweep it
+    separately.
+  - **#16:** billing reads ?upgraded=1 via window.location in an effect
+    (sign-in's deliberate pattern) — useSearchParams + its Suspense
+    requirement removed.
+  - **#21:** leaderboard query filters games_played > 0 (page-level, not in
+    the view, so a full-roster mode stays possible).
+
 - **Audit #9–#12 closed 2026-07-04:**
   - **#9** (schema.sql missing provision_user_row) — was already resolved by the
     2026-07-04 schema re-sync; re-verified (7 references present).

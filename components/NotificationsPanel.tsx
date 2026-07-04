@@ -16,6 +16,7 @@ import {
   sendTestPush,
   updateNotificationPreferences,
 } from '@/app/actions/push';
+import { InlineConfirm } from '@/components/Toast';
 
 type Device = {
   id: string;
@@ -138,8 +139,9 @@ export default function NotificationsPanel() {
   }
 
   async function handleRemoveDevice(device: Device) {
+    // Confirmation is the InlineConfirm two-step on the button (U-6 sweep,
+    // audit #15 — was a native confirm()); errors render inline via setError.
     setError(null);
-    if (!confirm(`Remove notifications for ${labelForUA(device.user_agent)}?`)) return;
     setBusy(true);
     try {
       const res = await unregisterPushSubscription(device.endpoint);
@@ -289,12 +291,18 @@ export default function NotificationsPanel() {
                     </div>
                     <div className="text-xs text-ink/40 italic">Added {created}</div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveDevice(d)}
-                    className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
-                  >
-                    Remove
-                  </button>
+                  <InlineConfirm
+                    confirmLabel="Remove"
+                    onConfirm={() => handleRemoveDevice(d)}
+                    render={(arm) => (
+                      <button
+                        onClick={arm}
+                        className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  />
                 </li>
               );
             })}

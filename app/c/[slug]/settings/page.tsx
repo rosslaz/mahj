@@ -35,9 +35,17 @@ export default function ClubSettingsPage() {
   const [admins, setAdmins] = useState<AdminCandidate[]>([]);
   const [transferTarget, setTransferTarget] = useState('');
   const [transferring, setTransferring] = useState(false);
+  // U-6 sweep (audit #15): transfer uses an inline two-step confirm (this
+  // page's own idiom — see the delete button below) instead of a native
+  // confirm(), and its outcomes render in THIS section instead of alert()s
+  // or the Basics form's error slot.
+  const [transferArmed, setTransferArmed] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferWarning, setTransferWarning] = useState<string | null>(null);
 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cb.club) return;
@@ -123,10 +131,7 @@ export default function ClubSettingsPage() {
     if (!transferTarget || !cb.club) return;
     const target = admins.find((a) => a.user_id === transferTarget);
     if (!target) return;
-    if (!confirm(
-      `Transfer ownership to ${target.name}? You will become an admin.\n\n` +
-      `If this club has an active Pro subscription paid by you, it will be set to cancel at the end of the current billing period — you won't be charged again, and ${target.name} can subscribe with their own card.`
-    )) return;
+    setTransferError(null);
     setTransferring(true);
     // Single atomic RPC via server action (migration 0036). The old
     // client-side 3-step update never worked: cm_update's WITH CHECK
@@ -137,15 +142,25 @@ export default function ClubSettingsPage() {
     // customer so the new owner can't open their portal).
     const res = await transferClubOwnership(cb.club.id, target.user_id);
     if (!res.ok) {
-      setError('Transfer failed: ' + res.error);
+      setTransferError('Transfer failed: ' + res.error);
       setTransferring(false);
+      setTransferArmed(false);
       return;
     }
-    alert(res.warning ? `Ownership transferred. Note: ${res.warning}` : 'Ownership transferred.');
+    if (res.warning) {
+      // Stay on the page: a billing wind-down problem is the one outcome the
+      // departing owner must actually SEE (this used to be an alert() that
+      // vanished on dismiss, then navigated away).
+      setTransferring(false);
+      setTransferArmed(false);
+      setTransferWarning(res.warning);
+      return;
+    }
     router.push(`/c/${slug}`);
   }
 
   async function deleteClub() {
+    setDeleteError(null);
     setDeleting(true);
     // Server action: cancels any active Stripe subscription FIRST, and
     // aborts the delete if that fails — better a live club the owner can
@@ -153,7 +168,7 @@ export default function ClubSettingsPage() {
     // direct update here left subscriptions billing forever.
     const res = await deleteClubWithBilling(cb.club!.id);
     setDeleting(false);
-    if (!res.ok) { alert(res.error); return; }
+    if (!res.ok) { setDeleteError(res.error); return; }
     router.push('/clubs');
   }
 
@@ -219,29 +234,63 @@ export default function ClubSettingsPage() {
         <p className="text-sm text-ink/60">
           Hand the club over to another admin. You'll become an admin.
         </p>
-        {admins.length === 0 ? (
+        {transferWarning ? (
+          <div className="border border-cinnabar/40 bg-cinnabar/5 p-4 space-y-3">
+            <p className="text-sm text-ink/80">
+              <strong>Ownership transferred</strong>, but billing needs attention: {transferWarning}
+            </p>
+            <Link href={`/c/${slug}`} className="btn btn-ghost text-sm">← Back to club</Link>
+          </div>
+        ) : admins.length === 0 ? (
           <p className="text-ink/50 italic text-sm">
             No admins yet. Promote someone to admin on the <Link href={`/c/${slug}/admin`} className="underline hover:text-cinnabar">Admin</Link> tab first.
           </p>
         ) : (
-          <div className="flex gap-3 flex-wrap items-end">
-            <div className="flex-1 min-w-[200px]">
-              <label className="label">New Owner</label>
-              <select className="input" value={transferTarget} onChange={(e) => setTransferTarget(e.target.value)}>
-                <option value="">— Select an admin —</option>
-                {admins.map((a) => (
-                  <option key={a.user_id} value={a.user_id}>{a.name} · {a.email}</option>
-                ))}
-              </select>
+          <>
+            <div className="flex gap-3 flex-wrap items-end">
+              <div className="flex-1 min-w-[200px]">
+                <label className="label">New Owner</label>
+                <select
+                  className="input"
+                  value={transferTarget}
+                  onChange={(e) => { setTransferTarget(e.target.value); setTransferArmed(false); }}
+                >
+                  <option value="">— Select an admin —</option>
+                  {admins.map((a) => (
+                    <option key={a.user_id} value={a.user_id}>{a.name} · {a.email}</option>
+                  ))}
+                </select>
+              </div>
+              {!transferArmed && (
+                <button
+                  onClick={() => setTransferArmed(true)}
+                  disabled={!transferTarget || transferring}
+                  className="btn"
+                >
+                  Transfer
+                </button>
+              )}
             </div>
-            <button
-              onClick={transferOwnership}
-              disabled={!transferTarget || transferring}
-              className="btn"
-            >
-              {transferring ? 'Transferring…' : 'Transfer'}
-            </button>
-          </div>
+            {transferArmed && transferTarget && (
+              <div className="border border-ink/15 p-4 space-y-3">
+                <p className="text-sm text-ink/80">
+                  Transfer ownership to <strong>{admins.find((a) => a.user_id === transferTarget)?.name}</strong>? You will become an admin.
+                </p>
+                <p className="text-xs text-ink/60">
+                  If this club has an active Pro subscription paid by you, it will be set to cancel at the end of the current billing period — you won&apos;t be charged again, and the new owner can subscribe with their own card.
+                </p>
+                <div className="flex gap-3 flex-wrap">
+                  <button onClick={transferOwnership} disabled={transferring} className="btn">
+                    {transferring ? 'Transferring…' : 'Yes, transfer'}
+                  </button>
+                  <button onClick={() => setTransferArmed(false)} disabled={transferring} className="btn btn-ghost">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {transferError && <p className="text-cinnabar text-sm">{transferError}</p>}
+          </>
         )}
       </section>
 
@@ -265,6 +314,7 @@ export default function ClubSettingsPage() {
               <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="btn btn-ghost">Cancel</button>
             </div>
           )}
+          {deleteError && <p className="text-cinnabar text-sm mt-3">{deleteError}</p>}
         </div>
       </section>
     </div>

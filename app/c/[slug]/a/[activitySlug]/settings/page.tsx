@@ -27,6 +27,7 @@ export default function ActivitySettingsPage() {
 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!act.activity) return;
@@ -77,6 +78,7 @@ export default function ActivitySettingsPage() {
 
   async function deleteActivity() {
     if (!act.activity) return;
+    setDeleteError(null);
     setDeleting(true);
     try {
       // Decide soft vs hard delete based on whether ANY game under this
@@ -127,7 +129,8 @@ export default function ActivitySettingsPage() {
       router.push(`/c/${clubSlug}`);
     } catch (err: any) {
       setDeleting(false);
-      alert(err.message);
+      // U-6 sweep (audit #15): inline error in the danger zone, was alert().
+      setDeleteError(err.message);
     }
   }
 
@@ -211,6 +214,7 @@ export default function ActivitySettingsPage() {
               <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="btn btn-ghost">Cancel</button>
             </div>
           )}
+          {deleteError && <p className="text-cinnabar text-sm mt-3">{deleteError}</p>}
         </div>
       </section>
     </div>

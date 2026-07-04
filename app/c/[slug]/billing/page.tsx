@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
@@ -33,7 +33,6 @@ type SubscriptionRow = {
  */
 export default function BillingPage() {
   const params = useParams();
-  const search = useSearchParams();
   const slug = params.slug as string;
   const auth = useAuth();
   const cb = useClub(slug);
@@ -42,6 +41,16 @@ export default function BillingPage() {
   const [sub, setSub] = useState<SubscriptionRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  // U-6 sweep (audit #15): checkout/portal/sync failures render inline here
+  // instead of native alert()s.
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Audit #16: read the one-shot ?upgraded=1 flag from the URL directly
+  // instead of useSearchParams, which requires a Suspense boundary this page
+  // never had (same deliberate approach as sign-in).
+  const [justUpgraded, setJustUpgraded] = useState(false);
+  useEffect(() => {
+    setJustUpgraded(new URLSearchParams(window.location.search).get('upgraded') === '1');
+  }, []);
 
   const load = useCallback(async () => {
     if (!cb.club) return;
@@ -105,10 +114,11 @@ export default function BillingPage() {
 
   async function startCheckout(plan: 'monthly' | 'annual') {
     if (working) return;
+    setActionError(null);
     setWorking(true);
     const res = await callApi('/api/billing/checkout', { clubId: cb.club!.id, plan });
     if (res.error) {
-      alert(res.error);
+      setActionError(res.error);
       setWorking(false);
       return;
     }
@@ -117,10 +127,11 @@ export default function BillingPage() {
 
   async function openPortal() {
     if (working) return;
+    setActionError(null);
     setWorking(true);
     const res = await callApi('/api/billing/portal', { clubId: cb.club!.id });
     if (res.error) {
-      alert(res.error);
+      setActionError(res.error);
       setWorking(false);
       return;
     }
@@ -129,17 +140,16 @@ export default function BillingPage() {
 
   async function refreshStatus() {
     if (working) return;
+    setActionError(null);
     setWorking(true);
     const res = await callApi('/api/billing/sync', { clubId: cb.club!.id });
     if (res.error) {
-      alert(res.error);
+      setActionError(res.error);
     } else {
       await load();
     }
     setWorking(false);
   }
-
-  const justUpgraded = search.get('upgraded') === '1';
 
   // ============================================================
   // Render based on subscription state
@@ -304,6 +314,9 @@ export default function BillingPage() {
 
       {/* ACTION BUTTONS — context-sensitive */}
       <section className="space-y-3">
+        {actionError && (
+          <p className="text-cinnabar text-sm text-center">{actionError}</p>
+        )}
         {/* Upgrade buttons: only for users who haven't subscribed yet.
             - Pure free tier
             - In trial but haven't entered checkout

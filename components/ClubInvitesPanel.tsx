@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { createClubInvites, revokeClubInvite } from '@/app/actions/club-invites';
+import { InlineConfirm, useToast } from '@/components/Toast';
 
 const MAX_INVITES_PER_SEND = 20;
 
@@ -34,6 +35,7 @@ export default function ClubInvitesPanel({ clubId, clubName, isPro, slug }: {
   slug: string;
 }) {
   const supabase = getBrowserSupabase();
+  const { toast } = useToast();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -114,10 +116,12 @@ export default function ClubInvitesPanel({ clubId, clubName, isPro, slug }: {
   }
 
   async function handleRevoke(inviteId: string) {
-    if (!confirm('Revoke this invitation? The link will stop working.')) return;
+    // Confirmation is the InlineConfirm two-step on the button itself (U-6
+    // sweep, audit #15 — was a native confirm()). Errors surface as a toast;
+    // the admin page wraps this panel in ToastProvider.
     const res = await revokeClubInvite(inviteId);
     if (!res.ok) {
-      alert(res.error);
+      toast(res.error, 'error');
       return;
     }
     await load();
@@ -233,12 +237,18 @@ export default function ClubInvitesPanel({ clubId, clubName, isPro, slug }: {
                           {inv.invited_by?.name ? `Sent by ${inv.invited_by.name}` : 'Sent'} · expires in {expiresInDays} day{expiresInDays === 1 ? '' : 's'}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleRevoke(inv.id)}
-                        className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
-                      >
-                        Revoke
-                      </button>
+                      <InlineConfirm
+                        confirmLabel="Revoke"
+                        onConfirm={() => handleRevoke(inv.id)}
+                        render={(arm) => (
+                          <button
+                            onClick={arm}
+                            className="text-xs tracking-[0.15em] uppercase text-ink/40 hover:text-cinnabar"
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      />
                     </li>
                   );
                 })}
