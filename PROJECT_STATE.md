@@ -116,7 +116,7 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
 - Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
-  baseline + migrations through **0035**). Regenerate it (don't hand-edit) after
+  baseline + migrations through **0036**). Regenerate it (don't hand-edit) after
   applying new migrations, and bump the migration number on this line to match the
   highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →
@@ -245,13 +245,12 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Current status / open items
 
-- **PENDING MIGRATION 0036** (`transfer_club_ownership` RPC) — created 2026-07-03,
-  **NOT yet applied**. Apply `supabase/migrations/0036_transfer_club_ownership_rpc.sql`
-  in the SQL editor, then regenerate `schema.sql` from the live DB (this also fixes
-  the documented `provision_user_row` drift) and bump the "through NNNN" line in
-  Data model to 0036. The Settings → Transfer Ownership button now calls this RPC
-  and FAILS until the migration is applied.
-- **Billing lifecycle fixes shipped 2026-07-03** (2026-07 audit items #1 + #3):
+- **Billing lifecycle fixes shipped 2026-07-03/04** (2026-07 audit items #1 + #3;
+  deployed in v2.22.1; migration 0036 (`transfer_club_ownership` RPC) applied to
+  the live DB 2026-07-04 via the Supabase MCP and verified — SECURITY DEFINER,
+  pinned search_path, execute revoked from anon per the 0027 footgun — and
+  `schema.sql` was re-synced the same day, resolving the old `provision_user_row`
+  drift):
   - `lib/stripe-cancel.ts` — `cancelClubSubscriptionImmediately` (retired/deleted
     clubs) + `windDownClubSubscriptionForTransfer` (cancel_at_period_end + detach
     the old owner's Stripe customer id; detach happens FIRST so a Stripe failure

@@ -2,15 +2,16 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0035. This file is the source
+-- reflecting the end state of migrations 0002–0036. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
--- KNOWN DRIFT (fix by re-dumping, per the ritual): this file is hand-maintained
--- and the FUNCTIONS section is missing `provision_user_row()` (migration 0032)
--- — it exists and is correct in the live DB and is referenced in the grants
--- comment below, but its body wasn't re-added here (the edit tool mangles the
--- dollar-quote delimiters). Regenerate this file from the live DB to resolve.
+-- Last synced 2026-07-04: function bodies for provision_user_row() and
+-- transfer_club_ownership() pulled verbatim from the live DB
+-- (pg_get_functiondef), and the full object inventory (tables, views,
+-- triggers, policies, functions) diffed against the live catalogs — no
+-- other drift. The previously documented provision_user_row drift is
+-- resolved.
 --
 -- Regenerate this file (don't hand-edit) after applying new migrations, by
 -- re-dumping structure from the live DB. Migrations remain the change log;
@@ -553,6 +554,65 @@ begin
   return v_user_id;
 end $$;
 
+-- provision_user_row (applied 2026-06-24 as migration `provision_user_row_rpc`):
+-- self-serve users-row provisioning at sign-in. Returns the caller's users
+-- row (creating it, or linking a pre-seeded unlinked row by email). Safe
+-- for anon: returns empty when auth.uid() is null. Body below is verbatim
+-- from the live DB (pg_get_functiondef, 2026-07-04).
+create or replace function public.provision_user_row()
+  returns table(user_id uuid, created boolean)
+  language plpgsql security definer set search_path to 'public', 'pg_catalog'
+as $$
+declare
+  v_auth_uid uuid;
+  v_email text;
+  v_existing_id uuid;
+  v_name text;
+  v_new_id uuid;
+begin
+  v_auth_uid := auth.uid();
+  if v_auth_uid is null then
+    -- No authenticated caller; nothing we can (or should) do.
+    return;
+  end if;
+
+  -- Already linked to a row? Return it.
+  select id into v_existing_id from users where auth_user_id = v_auth_uid limit 1;
+  if v_existing_id is not null then
+    return query select v_existing_id, false;
+    return;
+  end if;
+
+  -- Pull the caller's email from auth.users.
+  select email into v_email from auth.users where id = v_auth_uid;
+  if v_email is null then
+    return;  -- can't provision without an email
+  end if;
+  v_email := lower(v_email);
+
+  -- A row may already exist by email (e.g. pre-seeded invite) but unlinked.
+  -- Link it rather than creating a duplicate (email is unique).
+  select id into v_existing_id from users where lower(email) = v_email limit 1;
+  if v_existing_id is not null then
+    -- Only link if it's not already bound to a different auth account.
+    update users
+      set auth_user_id = v_auth_uid
+      where id = v_existing_id and auth_user_id is null;
+    -- If it was bound to a different account, we do NOT clobber; just return it.
+    return query select v_existing_id, false;
+    return;
+  end if;
+
+  -- No row by auth_user_id or email → create one.
+  v_name := initcap(replace(regexp_replace(split_part(v_email, '@', 1), '[._-]+', ' ', 'g'), '  ', ' '));
+  insert into users (auth_user_id, email, name)
+  values (v_auth_uid, v_email, coalesce(nullif(trim(v_name), ''), 'Player'))
+  returning id into v_new_id;
+
+  return query select v_new_id, true;
+end;
+$$;
+
 create or replace function public.generate_join_code()
   returns text language plpgsql set search_path to 'public', 'pg_catalog'
 as $$
@@ -688,6 +748,72 @@ begin
   update club_members set role = 'member' where club_id = p_club_id and user_id = p_leaving_user_id;
 
   return v_new_owner;
+end;
+$$;
+
+-- transfer_club_ownership (migration 0036): voluntary owner-initiated
+-- transfer to an existing admin. Atomic sibling of the _on_delete path
+-- above, but self-authorizing (SECURITY DEFINER + current_user_id() check),
+-- so it must be called with the caller's session — NOT the service role
+-- (auth.uid() would be null and the RPC rejects). Replaces the broken
+-- client-side 3-step transfer, which cm_update's WITH CHECK rejected 100%
+-- of the time (can't set role='owner' while clubs.owner_user_id still
+-- points at the old owner). Billing wind-down happens app-side after this
+-- commits (app/actions/club-lifecycle.ts).
+create or replace function public.transfer_club_ownership(p_club_id uuid, p_new_owner_user_id uuid)
+  returns void language plpgsql security definer set search_path to 'public', 'pg_catalog'
+as $$
+declare
+  v_caller uuid;
+  v_owner uuid;
+begin
+  v_caller := current_user_id();
+  if v_caller is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  if p_new_owner_user_id = v_caller then
+    raise exception 'You already own this club.';
+  end if;
+
+  -- Lock the club row; guards ownership and serializes concurrent transfers.
+  select owner_user_id into v_owner
+  from clubs
+  where id = p_club_id and deleted_at is null
+  for update;
+
+  if v_owner is null then
+    raise exception 'Club not found.';
+  end if;
+  if v_owner <> v_caller then
+    raise exception 'Only the club owner can transfer ownership.';
+  end if;
+
+  -- The new owner must be a current, non-deleted admin. Lock their
+  -- membership row so a concurrent demotion/removal must wait.
+  perform 1
+  from club_members cm
+  join users u on u.id = cm.user_id and u.deleted_at is null
+  where cm.club_id = p_club_id
+    and cm.user_id = p_new_owner_user_id
+    and cm.role = 'admin'
+  for update of cm;
+
+  if not found then
+    raise exception 'The new owner must be an admin of this club.';
+  end if;
+
+  update clubs
+    set owner_user_id = p_new_owner_user_id
+    where id = p_club_id;
+
+  update club_members
+    set role = 'owner'
+    where club_id = p_club_id and user_id = p_new_owner_user_id;
+
+  update club_members
+    set role = 'admin'
+    where club_id = p_club_id and user_id = v_caller;
 end;
 $$;
 
@@ -875,15 +1001,19 @@ begin
 end;
 $$;
 
--- Function grants (mirror migrations 0027 + 0032: RLS helpers callable by
--- clients incl. anon (they run inside policy expressions as the invoking
--- role); billing helpers authenticated-only; promo claim, trigger fns +
--- ownership transfer are service-role only)
+-- Function grants (mirror migrations 0027 + 0032 + provision_user_row_rpc +
+-- 0036: RLS helpers callable by clients incl. anon (they run inside policy
+-- expressions as the invoking role); billing helpers authenticated-only;
+-- promo claim, trigger fns + on-delete ownership transfer are service-role
+-- only)
 grant execute on function public.current_user_id() to anon, authenticated;
 grant execute on function public.is_club_member(uuid, text) to anon, authenticated;
 grant execute on function public.is_public_event(uuid) to anon, authenticated;
 grant execute on function public.can_manage_event(uuid) to anon, authenticated, service_role;
 grant execute on function public.link_auth_to_user() to authenticated;
+-- provision_user_row: anon grant is live-DB state and harmless by design
+-- (the function returns empty when auth.uid() is null).
+grant execute on function public.provision_user_row() to anon, authenticated;
 grant execute on function public.club_is_pro(uuid) to authenticated, service_role;
 grant execute on function public.club_member_count(uuid) to authenticated, service_role;
 grant execute on function public.club_activity_count(uuid) to authenticated, service_role;
@@ -897,6 +1027,10 @@ grant execute on function public.miles_between(double precision, double precisio
 -- grants; 0032 stripped the leftover PUBLIC grants that transitively
 -- re-included them).
 grant execute on function public.transfer_club_ownership_on_delete(uuid, uuid) to service_role;
+-- transfer_club_ownership (0036) self-authorizes via current_user_id();
+-- authenticated only (0036's explicit revoke undid the default-privilege
+-- auto-grant to anon — see the 0027 footgun note).
+grant execute on function public.transfer_club_ownership(uuid, uuid) to authenticated;
 
 -- ============================================================
 -- VIEWS (all security_invoker — see migrations 0011, 0027, 0029)
