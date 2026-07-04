@@ -16,6 +16,7 @@ type SubscriptionRow = {
   cancel_at_period_end: boolean;
   is_launch_promo: boolean;
   stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
 };
 
 /**
@@ -47,7 +48,7 @@ export default function BillingPage() {
     const fetchOnce = async () =>
       supabase
         .from('club_subscriptions')
-        .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo, stripe_subscription_id')
+        .select('plan, status, trial_ends_at, current_period_end, cancel_at_period_end, is_launch_promo, stripe_subscription_id, stripe_customer_id')
         .eq('club_id', cb.club!.id)
         .maybeSingle();
 
@@ -162,6 +163,16 @@ export default function BillingPage() {
   const isTrialingPreSubscribe = sub.status === 'trialing' && !hasSubscribed;
   const isTrialingPostSubscribe = sub.status === 'trialing' && hasSubscribed;
   const isTrialing = sub.status === 'trialing';
+
+  // Post-transfer orphan: active-but-canceling with no Stripe customer on
+  // file. This is the state an ownership transfer leaves behind — the
+  // previous owner's sub is winding down (cancel_at_period_end) and their
+  // Stripe customer was detached. The NEW owner should be able to subscribe
+  // with their own card right away (an annual plan could otherwise leave
+  // them waiting months), so show the upgrade buttons. The webhook's
+  // stale-sub guard makes sure the old sub's period-end deletion can't
+  // downgrade the club once the new subscription exists.
+  const isOrphanedActive = isActive && sub.cancel_at_period_end && !sub.stripe_customer_id;
 
   const trialDaysLeft = sub.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(sub.trial_ends_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
@@ -297,11 +308,16 @@ export default function BillingPage() {
             - Pure free tier
             - In trial but haven't entered checkout
             - Canceled (give them a way to re-up) */}
-        {(isFree || isTrialingPreSubscribe || isCanceled) && (
+        {(isFree || isTrialingPreSubscribe || isCanceled || isOrphanedActive) && (
           <>
             {isTrialingPreSubscribe && fmtDate(sub.trial_ends_at) && (
               <p className="text-xs text-ink/50 italic text-center">
                 Subscribe now and you won&apos;t be charged until your trial ends on {fmtDate(sub.trial_ends_at)}. You keep your remaining trial days.
+              </p>
+            )}
+            {isOrphanedActive && fmtDate(sub.current_period_end) && (
+              <p className="text-xs text-ink/50 italic text-center">
+                The previous owner&apos;s subscription covers Pro until {fmtDate(sub.current_period_end)}. Subscribe below to keep Pro running under your own billing after that.
               </p>
             )}
             <UpgradeButtons onSelect={startCheckout} working={working} />
@@ -311,7 +327,7 @@ export default function BillingPage() {
         {/* Manage subscription: anyone with a Stripe sub on file, regardless
             of whether they're trialing or already converted to active. The
             portal lets them update card, change plan, cancel. */}
-        {(isActive || isPastDue || isTrialingPostSubscribe) && (
+        {(isActive || isPastDue || isTrialingPostSubscribe) && !!sub.stripe_customer_id && (
           <>
             <button onClick={openPortal} disabled={working} className="btn btn-jade w-full justify-center">
               {working ? 'Opening…' : 'Manage subscription'}

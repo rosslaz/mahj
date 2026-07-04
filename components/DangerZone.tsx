@@ -75,6 +75,8 @@ export default function DangerZone() {
               <li>Remove you from every club you've joined</li>
               <li>Sign you out everywhere and prevent future sign-ins under this email</li>
               <li>Reassign any events you host to the club owner</li>
+              <li>Hand clubs you own to their senior admin (or retire clubs with no admin)</li>
+              <li>Cancel any Pro subscriptions billed to you — you won't be charged again</li>
             </ul>
             <p className="text-sm text-ink/80">
               Your game history will be <strong>preserved but anonymized</strong> — other players will still see the games they played, but your name will no longer appear.

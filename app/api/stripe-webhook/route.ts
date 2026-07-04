@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getServiceSupabase } from '@/lib/supabase-service';
 import { applyStripeSubscriptionToDb } from '@/lib/stripe-sync';
 
@@ -18,6 +19,15 @@ import { applyStripeSubscriptionToDb } from '@/lib/stripe-sync';
 //   - customer.subscription.deleted    — fully canceled
 //   - invoice.payment_succeeded        — renewal payment ok (update period end)
 //   - invoice.payment_failed           — payment failed, sub goes past_due
+//
+// Stale-sub guards: after an ownership transfer, a club can briefly have
+// TWO Stripe subscriptions — the old owner's (active but cancel_at_period_end)
+// and the new owner's fresh one. Both carry the same pungctual_club_id
+// metadata, so without a guard the old sub's period-end deletion event would
+// downgrade a club that just got a brand-new paid subscription. Rule: once
+// club_subscriptions tracks a subscription id, events from a DIFFERENT sub
+// are ignored — unless that different sub is genuinely ongoing (live status
+// and not winding down), in which case we adopt it as the club's new sub.
 
 // App Router automatically gives us the raw body via request.text(). No need
 // to configure bodyParser like in Pages Router.
@@ -105,6 +115,7 @@ export async function POST(request: NextRequest) {
         // Costs one extra API call per subscription state change — fine
         // because these events fire infrequently.
         const sub = await stripe.subscriptions.retrieve(eventSub.id);
+        if (await isStaleSubEvent(serviceClient, clubId, sub)) break;
         await applyStripeSubscriptionToDb(serviceClient, clubId, sub, "stripe-webhook");
         break;
       }
@@ -113,6 +124,14 @@ export async function POST(request: NextRequest) {
         const sub = event.data.object as Stripe.Subscription;
         const clubId = sub.metadata?.pungctual_club_id;
         if (!clubId) break;
+        // Stale-sub guard: if the club now tracks a different subscription
+        // (new owner re-subscribed during the old sub's wind-down), this
+        // deletion belongs to the old sub — do NOT downgrade the club.
+        const storedSubId = await getStoredSubscriptionId(serviceClient, clubId);
+        if (storedSubId && storedSubId !== sub.id) {
+          console.log(`[stripe-webhook] subscription.deleted for stale sub ${sub.id} (club ${clubId} now tracks ${storedSubId}); skipping downgrade.`);
+          break;
+        }
         // Subscription fully ended — downgrade to free, clear period info
         await serviceClient
           .from('club_subscriptions')
@@ -138,6 +157,7 @@ export async function POST(request: NextRequest) {
         const sub = await stripe.subscriptions.retrieve(subId);
         const clubId = sub.metadata?.pungctual_club_id;
         if (!clubId) break;
+        if (await isStaleSubEvent(serviceClient, clubId, sub)) break;
         await applyStripeSubscriptionToDb(serviceClient, clubId, sub, "stripe-webhook");
         break;
       }
@@ -149,6 +169,13 @@ export async function POST(request: NextRequest) {
         const sub = await stripe.subscriptions.retrieve(subId);
         const clubId = sub.metadata?.pungctual_club_id;
         if (!clubId) break;
+        // Stale-sub guard: don't mark the club past_due over a failed charge
+        // on a subscription it no longer tracks.
+        const storedSubId = await getStoredSubscriptionId(serviceClient, clubId);
+        if (storedSubId && storedSubId !== sub.id) {
+          console.log(`[stripe-webhook] payment_failed for stale sub ${sub.id} (club ${clubId} now tracks ${storedSubId}); skipping.`);
+          break;
+        }
         // Mark past_due. We still grant Pro access during past_due (Stripe
         // will retry the card automatically over the next few days).
         await serviceClient
@@ -182,5 +209,37 @@ export async function POST(request: NextRequest) {
     // Return 500 so Stripe retries
     return NextResponse.json({ error: 'Handler failed.' }, { status: 500 });
   }
+}
+
+async function getStoredSubscriptionId(
+  serviceClient: SupabaseClient,
+  clubId: string,
+): Promise<string | null> {
+  const { data } = await serviceClient
+    .from('club_subscriptions')
+    .select('stripe_subscription_id')
+    .eq('club_id', clubId)
+    .maybeSingle();
+  return (data as any)?.stripe_subscription_id ?? null;
+}
+
+// True if this event is about a subscription the club no longer tracks and
+// that isn't a legitimate replacement. A replacement ("ongoing") sub is one
+// with a live status that is NOT set to cancel at period end — i.e. a fresh
+// subscription from the new owner, which we should adopt. An active-but-
+// canceling sub with a mismatched id is the old owner's winding-down sub:
+// ignore its events so they can't clobber the new subscription's state.
+async function isStaleSubEvent(
+  serviceClient: SupabaseClient,
+  clubId: string,
+  sub: Stripe.Subscription,
+): Promise<boolean> {
+  const stored = await getStoredSubscriptionId(serviceClient, clubId);
+  if (!stored || stored === sub.id) return false;
+  const isOngoing =
+    ['active', 'trialing', 'past_due'].includes(sub.status) && !sub.cancel_at_period_end;
+  if (isOngoing) return false; // genuinely live replacement — adopt it
+  console.log(`[stripe-webhook] ignoring event for stale sub ${sub.id} (club ${clubId} tracks ${stored}).`);
+  return true;
 }
 

@@ -245,6 +245,33 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Current status / open items
 
+- **PENDING MIGRATION 0036** (`transfer_club_ownership` RPC) — created 2026-07-03,
+  **NOT yet applied**. Apply `supabase/migrations/0036_transfer_club_ownership_rpc.sql`
+  in the SQL editor, then regenerate `schema.sql` from the live DB (this also fixes
+  the documented `provision_user_row` drift) and bump the "through NNNN" line in
+  Data model to 0036. The Settings → Transfer Ownership button now calls this RPC
+  and FAILS until the migration is applied.
+- **Billing lifecycle fixes shipped 2026-07-03** (2026-07 audit items #1 + #3):
+  - `lib/stripe-cancel.ts` — `cancelClubSubscriptionImmediately` (retired/deleted
+    clubs) + `windDownClubSubscriptionForTransfer` (cancel_at_period_end + detach
+    the old owner's Stripe customer id; detach happens FIRST so a Stripe failure
+    can't leave the new owner able to open the old owner's portal).
+  - `app/actions/club-lifecycle.ts` — `transferClubOwnership` (calls the 0036 RPC
+    with the CALLER's client — authz is in the DB — then winds down billing) and
+    `deleteClubWithBilling` (cancels Stripe FIRST; aborts the delete if that fails).
+  - `delete-account.ts` — per-owned-club billing cleanup (wind-down on transfer,
+    immediate cancel on retire); failures LOG loudly but never block deletion.
+  - Webhook stale-sub guards (`stripe-webhook/route.ts`) — events from a sub the
+    club no longer tracks are ignored unless the sub is a genuinely ongoing
+    replacement; prevents an old winding-down sub's period-end deletion from
+    downgrading a club whose new owner already re-subscribed.
+  - Billing page — new "orphaned active" state (active + cancel_at_period_end +
+    no stripe_customer_id, i.e. post-transfer) shows the upgrade buttons so a new
+    owner can subscribe without waiting out the previous owner's paid period;
+    "Manage subscription" now requires a stripe_customer_id on file.
+  - Accepted edge: a transferred club keeps its remaining in-app trial without
+    consuming the new owner's lifetime trial (requires a cooperating owner who
+    burns their own; not worth blocking).
 - **Beta:** Cecilia is inviting her real mahjong club to test. Priority = capture
   friction, fix fast, DON'T build new features mid-beta. Stay responsive to bugs.
 - **Refund** the $9 Stripe live-test charge if not already done.

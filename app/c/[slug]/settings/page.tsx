@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
+import { transferClubOwnership, deleteClubWithBilling } from '@/app/actions/club-lifecycle';
 
 type AdminCandidate = {
   user_id: string;
@@ -119,34 +120,40 @@ export default function ClubSettingsPage() {
   }
 
   async function transferOwnership() {
-    if (!transferTarget) return;
+    if (!transferTarget || !cb.club) return;
     const target = admins.find((a) => a.user_id === transferTarget);
     if (!target) return;
-    if (!confirm(`Transfer ownership to ${target.name}? You will become an admin.`)) return;
+    if (!confirm(
+      `Transfer ownership to ${target.name}? You will become an admin.\n\n` +
+      `If this club has an active Pro subscription paid by you, it will be set to cancel at the end of the current billing period — you won't be charged again, and ${target.name} can subscribe with their own card.`
+    )) return;
     setTransferring(true);
-    try {
-      const { error: e1 } = await supabase.from('club_members').update({ role: 'owner' }).eq('club_id', cb.club!.id).eq('user_id', target.user_id);
-      if (e1) throw e1;
-      const { error: e2 } = await supabase.from('clubs').update({ owner_user_id: target.user_id }).eq('id', cb.club!.id);
-      if (e2) throw e2;
-      const { error: e3 } = await supabase.from('club_members').update({ role: 'admin' }).eq('club_id', cb.club!.id).eq('user_id', auth.userId!);
-      if (e3) throw e3;
-      alert('Ownership transferred.');
-      router.push(`/c/${slug}`);
-    } catch (e: any) {
-      setError('Transfer failed: ' + e.message);
+    // Single atomic RPC via server action (migration 0036). The old
+    // client-side 3-step update never worked: cm_update's WITH CHECK
+    // rejects setting role='owner' while clubs.owner_user_id still points
+    // at the old owner, so step 1 always failed with 42501 — and even
+    // reordered it wasn't atomic. The server action also winds down
+    // billing (cancel_at_period_end + detach the old owner's Stripe
+    // customer so the new owner can't open their portal).
+    const res = await transferClubOwnership(cb.club.id, target.user_id);
+    if (!res.ok) {
+      setError('Transfer failed: ' + res.error);
       setTransferring(false);
+      return;
     }
+    alert(res.warning ? `Ownership transferred. Note: ${res.warning}` : 'Ownership transferred.');
+    router.push(`/c/${slug}`);
   }
 
   async function deleteClub() {
     setDeleting(true);
-    const { error: delErr } = await supabase
-      .from('clubs')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', cb.club!.id);
+    // Server action: cancels any active Stripe subscription FIRST, and
+    // aborts the delete if that fails — better a live club the owner can
+    // retry than a deleted ghost that keeps charging their card. The old
+    // direct update here left subscriptions billing forever.
+    const res = await deleteClubWithBilling(cb.club!.id);
     setDeleting(false);
-    if (delErr) { alert(delErr.message); return; }
+    if (!res.ok) { alert(res.error); return; }
     router.push('/clubs');
   }
 
@@ -243,7 +250,7 @@ export default function ClubSettingsPage() {
         <div>
           <p className="font-medium mb-1">Delete club</p>
           <p className="text-sm text-ink/60 mb-4">
-            Soft-deletes the club and all of its activities. Recoverable with database access. Member history is preserved.
+            Soft-deletes the club and all of its activities, and immediately cancels any active Pro subscription. The club is recoverable with database access; the subscription is not. Member history is preserved.
           </p>
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)} className="btn" style={{ background: '#9c2c1f', color: '#f5efe6' }}>

@@ -3,6 +3,10 @@
 import { getServiceSupabase } from '@/lib/supabase-service';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { dispatchEventHostReassigned } from '@/lib/notifications';
+import {
+  cancelClubSubscriptionImmediately,
+  windDownClubSubscriptionForTransfer,
+} from '@/lib/stripe-cancel';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -137,8 +141,35 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
       }
       if (newOwnerId) {
         transferredClubIds.push(club.id);
+        // Billing hand-off: the sub is attached to the deleting owner's
+        // Stripe customer. Set cancel_at_period_end (they're never charged
+        // again) and detach their customer id (the new owner must not be
+        // able to open a portal against the departed owner's card). The
+        // club keeps Pro through the already-paid period; the new owner
+        // re-subscribes from the billing page. Failures LOG but never
+        // block the deletion — the user asked to be deleted.
+        const wind = await windDownClubSubscriptionForTransfer(serviceClient, club.id, 'delete-account');
+        if (!wind.ok || wind.warning) {
+          console.error(
+            `[deleteMyAccount] BILLING WIND-DOWN ISSUE for club ${club.id}:`,
+            !wind.ok ? wind.error : wind.warning,
+            '— cancel manually in the Stripe dashboard.'
+          );
+        }
       } else {
         retiredClubIds.push(club.id);
+        // Club retired (soft-deleted, no admin to take it) — cancel any
+        // subscription immediately so the deleted user's card is never
+        // charged again for a club nobody can see. Same log-don't-block
+        // policy as above.
+        const cancel = await cancelClubSubscriptionImmediately(serviceClient, club.id, 'delete-account');
+        if (!cancel.ok) {
+          console.error(
+            `[deleteMyAccount] BILLING CANCEL FAILED for club ${club.id}:`,
+            cancel.error,
+            '— cancel manually in the Stripe dashboard.'
+          );
+        }
       }
     }
     if (transferredClubIds.length > 0) {
