@@ -5,6 +5,7 @@ import { getServiceSupabase } from '@/lib/supabase-service';
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { dispatchClubMemberJoined } from '@/lib/notifications';
 import { canAddMember, canSendEmailInvites } from '@/lib/billing';
+import { resendFrom } from '@/lib/resend-from';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -417,7 +418,6 @@ async function sendInviteEmail(opts: {
   welcomeMessage: string | null;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'no-reply@pungctual.com';
   if (!apiKey) {
     throw new Error('RESEND_API_KEY not configured');
   }
@@ -496,7 +496,7 @@ async function sendInviteEmail(opts: {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: `Pungctual <${fromEmail}>`,
+      from: resendFrom(),
       to: [opts.to],
       subject: `${opts.inviterName} invited you to ${opts.clubName} on Pungctual`,
       text: textBody,

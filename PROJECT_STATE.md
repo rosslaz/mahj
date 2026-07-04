@@ -116,7 +116,7 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
 - Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
-  baseline + migrations through **0038**). Regenerate it (don't hand-edit) after
+  baseline + migrations through **0039** (0040 pending — see open items)). Regenerate it (don't hand-edit) after
   applying new migrations, and bump the migration number on this line to match the
   highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →
@@ -244,6 +244,31 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 ---
 
 ## Current status / open items
+
+- **PENDING MIGRATION 0040** (`events_update` → host/admin only) — created
+  2026-07-04, **NOT applied**; the file is in the repo. Sequence matters:
+  deploy the code containing the claim_event_host page change FIRST, then
+  apply 0040 (SQL editor or ask Claude — Supabase MCP). Applying early
+  silently breaks the deployed "Host this night" button (member UPDATE
+  filtered to 0 rows, no error). After applying, update the marked
+  events_update block in schema.sql and bump the through-line to 0040.
+- **Email from-header + events RLS fixes shipped 2026-07-04** (2026-07 audit
+  items #6 + #8):
+  - **#6:** `.env.example` documented `RESEND_FROM_EMAIL=Pungctual <hello@...>`
+    while 4 senders wrapped again (`Pungctual <${fromEmail}>`) — nested
+    brackets → Resend 422 for every email the moment anyone set the var as
+    documented (send-invites.ts had the inverse bug). New `lib/resend-from.ts`
+    (`resendFrom(displayName?)` / `resendFromAddress()`) accepts either form;
+    all 5 senders (club-invites, event-invites, send-invites, delete-account,
+    trial-reminders) now use it; .env.example fixed.
+  - **#8:** member-wide `events_update` let any member rewrite any event via
+    the API. Split fix: 0039 `claim_event_host` RPC (applied + live-tested
+    2026-07-04, rolled-back test: 8 assertions incl. concurrent-claim lock,
+    address copy, and the WITH CHECK release-host snapshot subtlety) carries
+    the one legitimate member write; the page's claimHost now calls it; 0040
+    (pending, above) tightens the policy to can_manage_event(id).
+    send-invites' invite_sequence bump and release/complete/reopen all pass
+    can_manage_event; notifications-cron writes are service-role.
 
 - **Legal docs + admin-cap backstop shipped 2026-07-04** (2026-07 audit items
   #4 + #7):

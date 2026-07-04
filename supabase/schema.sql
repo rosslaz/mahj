@@ -2,11 +2,16 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0038. This file is the source
+-- reflecting the end state of migrations 0002–0039.
+-- (0040 exists in the repo but is PENDING — see the events_update policy note.) This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
--- Last synced 2026-07-04 (third pass, after 0038): enforce_free_tier_admin_cap
+-- Last synced 2026-07-04 (fourth pass, after 0039): claim_event_host RPC
+-- added. events_update is still the member-wide policy in the live DB —
+-- 0040 tightens it and is applied only after the claim-host code deploys.
+--
+-- Third pass same day (after 0038): enforce_free_tier_admin_cap
 -- trigger fn + trigger added, verified against the live catalogs and
 -- exercised with a rolled-back live test.
 --
@@ -927,6 +932,59 @@ begin
   return NEW;
 end $$;
 
+create or replace function public.claim_event_host(p_event_id uuid)
+  returns void language plpgsql security definer set search_path to 'public', 'pg_catalog'
+as $$
+declare
+  v_caller uuid;
+  v_event record;
+  v_user record;
+begin
+  -- Claim-host as an RPC (0039): the one legitimate plain-member event
+  -- write, moved out of events_update so 0040 can tighten that policy to
+  -- host/admin only (audit #8). FOR UPDATE serializes concurrent claims.
+  v_caller := current_user_id();
+  if v_caller is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select id, club_id, host_player_id, status, street, city, state, zip
+    into v_event
+  from events
+  where id = p_event_id and deleted_at is null
+  for update;
+
+  if not found then
+    raise exception 'Event not found.';
+  end if;
+  if v_event.status <> 'active' then
+    raise exception 'Only active events can be hosted.';
+  end if;
+  if v_event.host_player_id is not null then
+    raise exception 'This event already has a host.';
+  end if;
+  if not is_club_member(v_event.club_id, 'member') then
+    raise exception 'Only club members can host this event.';
+  end if;
+
+  if v_event.street is null and v_event.city is null
+     and v_event.state is null and v_event.zip is null then
+    select street, city, state, zip into v_user from users where id = v_caller;
+    update events
+      set host_player_id = v_caller,
+          street = v_user.street,
+          city   = v_user.city,
+          state  = v_user.state,
+          zip    = v_user.zip
+      where id = p_event_id;
+  else
+    update events
+      set host_player_id = v_caller
+      where id = p_event_id;
+  end if;
+end;
+$$;
+
 create or replace function public.enforce_free_tier_activity()
   returns trigger language plpgsql security definer set search_path to 'public', 'pg_catalog'
 as $$
@@ -1087,6 +1145,10 @@ grant execute on function public.transfer_club_ownership_on_delete(uuid, uuid) t
 -- authenticated only (0036's explicit revoke undid the default-privilege
 -- auto-grant to anon — see the 0027 footgun note).
 grant execute on function public.transfer_club_ownership(uuid, uuid) to authenticated;
+-- claim_event_host (0039) self-authorizes via current_user_id(); the
+-- internal update runs as owner (bypasses RLS — the point, since 0040
+-- removes the member arm from events_update).
+grant execute on function public.claim_event_host(uuid) to authenticated;
 
 -- ============================================================
 -- VIEWS (all security_invoker — see migrations 0011, 0027, 0029)
@@ -1244,6 +1306,9 @@ create policy activities_delete on public.activities for delete to public using 
 -- events
 create policy events_select on public.events for select to public using (((exists ( select 1 from club_members cm where ((cm.club_id = events.club_id) and (cm.user_id = current_user_id()) and (cm.role = any (array['owner'::text, 'admin'::text]))))) or (host_player_id = current_user_id()) or ((visibility = 'normal'::text) and is_club_member(club_id, 'member'::text)) or (exists ( select 1 from event_invites ei where ((ei.event_id = events.id) and (ei.invitee_user_id = current_user_id()) and (ei.status = any (array['pending'::text, 'accepted'::text]))))) or (exists ( select 1 from night_signups ns where ((ns.event_id = events.id) and (ns.player_id = current_user_id()) and (ns.status = 'approved'::text))))));
 create policy events_insert on public.events for insert to public with check (is_club_member(club_id, 'member'::text));
+-- PENDING 0040: this member-wide policy is the LIVE state. 0040 replaces
+-- it with using/with check (can_manage_event(id)) — apply 0040 only after
+-- deploying the claim_event_host page change, then update this file.
 create policy events_update on public.events for update to public using (is_club_member(club_id, 'member'::text));
 create policy events_delete on public.events for delete to public using (is_club_member(club_id, 'admin'::text));
 

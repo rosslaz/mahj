@@ -9,6 +9,7 @@ import {
   dispatchEventInvitationAccepted,
   dispatchEventInvitationDeclined,
 } from '@/lib/notifications';
+import { resendFrom } from '@/lib/resend-from';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -421,7 +422,6 @@ async function sendOutsideInviteEmail(opts: {
   welcomeMessage: string | null;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'no-reply@pungctual.com';
   if (!apiKey) throw new Error('RESEND_API_KEY not configured');
 
   // Reuses the club-invite token flow. URL is /clubs/invite/{token} as
@@ -504,7 +504,7 @@ async function sendOutsideInviteEmail(opts: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      from: `Pungctual <${fromEmail}>`,
+      from: resendFrom(),
       to: [opts.to],
       subject: `${opts.inviterName} invited you to ${opts.eventName} on Pungctual`,
       text: textBody,

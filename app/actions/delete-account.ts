@@ -7,6 +7,7 @@ import {
   cancelClubSubscriptionImmediately,
   windDownClubSubscriptionForTransfer,
 } from '@/lib/stripe-cancel';
+import { resendFrom } from '@/lib/resend-from';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -358,7 +359,6 @@ export async function deleteMyAccount(confirmText: string): Promise<Result> {
 
 async function sendDeletionConfirmation(toEmail: string, name: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'no-reply@pungctual.com';
   if (!apiKey) {
     console.warn('[deleteMyAccount] RESEND_API_KEY not configured; skipping confirmation email');
     return;
@@ -388,7 +388,7 @@ Thanks for being a part of Pungctual.
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: `Pungctual <${fromEmail}>`,
+      from: resendFrom(),
       to: [toEmail],
       subject: 'Your Pungctual account has been deleted',
       text: body,
@@ -400,3 +400,4 @@ Thanks for being a part of Pungctual.
     throw new Error(`Resend ${res.status}: ${errBody}`);
   }
 }
+

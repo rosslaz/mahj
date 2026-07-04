@@ -355,20 +355,13 @@ function EventDetailPageInner() {
 
   async function claimHost() {
     if (!auth.userId || !night) return;
+    // Friendly pre-check for public events (the enforce_public_event_address
+    // DB trigger is the backstop; it fires inside the RPC's update too).
     const claimer = members.find((m) => m.user_id === auth.userId);
     const nightHasAddress = !!(night.street || night.city || night.state || night.zip);
-    const updates: any = { host_player_id: auth.userId };
-    if (!nightHasAddress && claimer) {
-      updates.street = claimer.street;
-      updates.city = claimer.city;
-      updates.state = claimer.state;
-      updates.zip = claimer.zip;
-    }
-    // For public events without city/state info, warn the user before submitting
-    // (the DB trigger would reject otherwise).
     if (isPublicEvent) {
-      const proposedCity = updates.city ?? night.city;
-      const proposedState = updates.state ?? night.state;
+      const proposedCity = nightHasAddress ? night.city : claimer?.city ?? null;
+      const proposedState = nightHasAddress ? night.state : claimer?.state ?? null;
       if (!proposedCity || !proposedState) {
         toast(
           'This is a public event, which requires city and state. Set those on your profile or on the event before claiming host.',
@@ -377,7 +370,13 @@ function EventDetailPageInner() {
         return;
       }
     }
-    const { error } = await supabase.from('events').update(updates).eq('id', id);
+    // RPC (migration 0039): performs exactly the claim transition — set
+    // host + copy the claimer's profile address onto an address-less event —
+    // with its own authz and a FOR UPDATE lock (one winner on concurrent
+    // claims). Required because events_update RLS is host/admin-only as of
+    // 0040 (audit #8: the old member-wide policy let any member rewrite any
+    // event via the API); a direct member UPDATE would silently match 0 rows.
+    const { error } = await supabase.rpc('claim_event_host', { p_event_id: id });
     if (error) toast(error.message, 'error'); else load();
   }
 

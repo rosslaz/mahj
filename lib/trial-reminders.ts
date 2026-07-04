@@ -17,6 +17,7 @@
 //   - Errors are logged but don't fail the cron
 
 import { getServiceSupabase } from '@/lib/supabase-service';
+import { resendFrom } from '@/lib/resend-from';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pungctual.com';
 
@@ -151,7 +152,6 @@ async function sendReminderEmail(
   billingUrl: string,
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'no-reply@pungctual.com';
   if (!apiKey) {
     console.warn('[trial-reminders] RESEND_API_KEY not set; skipping email');
     return;
@@ -236,7 +236,7 @@ async function sendReminderEmail(
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: `Pungctual <${fromEmail}>`,
+      from: resendFrom(),
       to: row.owner.email,
       subject,
       text: textBody,
@@ -256,3 +256,4 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+

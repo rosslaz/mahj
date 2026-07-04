@@ -3,6 +3,7 @@
 import { getSupabase, getCallerUserId } from '@/lib/supabase';
 import { buildICalendar, parseLocalDateTime, addLocalHours, type ICalAttendee } from '@/lib/ics';
 import { formatAddressLines } from '@/lib/address';
+import { resendFrom } from '@/lib/resend-from';
 
 // Resend's SMTP-via-HTTP-API endpoint. Using the REST API directly avoids
 // pulling in the @resend/node SDK as a dependency.
@@ -26,7 +27,6 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
     return { ok: false, error: 'Email sending is not configured (RESEND_API_KEY missing).' };
   }
 
-  const fromAddress = process.env.RESEND_FROM_EMAIL || 'no-reply@pungctual.com';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://pungctual.com';
 
   const supabase = getSupabase();
@@ -166,7 +166,7 @@ export async function sendCalendarInvites(input: SendInvitesInput): Promise<Send
   // ---- SEND VIA RESEND ----
   const hostName = host?.name || 'Pungctual';
   const hostEmail = host?.email;
-  const fromDisplay = `${hostName} via Pungctual <${fromAddress}>`;
+  const fromDisplay = resendFrom(`${hostName} via Pungctual`);
 
   const dateStr = new Date((eventData as any).date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
@@ -334,3 +334,4 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
