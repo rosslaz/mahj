@@ -16,6 +16,19 @@ export default function ActivityLayout({ children }: { children: React.ReactNode
   if (cb.loading || act.loading) {
     return <p className="text-ink/60 italic">Loading…</p>;
   }
+  if (cb.error || act.error) {
+    // Load failure ≠ not found (audit #11). Note this layout's own useClub
+    // instance can fail independently of the club layout's — the hooks are
+    // per-component — and a failed club load here would otherwise cascade
+    // into a phantom "Activity Not Found" (no clubId → notFound).
+    return (
+      <div className="max-w-md mx-auto text-center pt-10">
+        <h1 className="font-display text-4xl mb-4">Connection Trouble</h1>
+        <p className="text-ink/60 mb-6">{cb.error ?? act.error}</p>
+        <button onClick={cb.error ? cb.retry : act.retry} className="btn btn-jade">Try again</button>
+      </div>
+    );
+  }
   if (act.notFound) {
     return (
       <div className="max-w-md mx-auto text-center pt-10">

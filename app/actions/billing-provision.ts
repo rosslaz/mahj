@@ -209,6 +209,12 @@ async function ensureClubSubscriptionImpl(clubId: string): Promise<Result> {
   const trialDays = claimedPromo ? LAUNCH_PROMO_TRIAL_DAYS : STANDARD_TRIAL_DAYS;
   const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
 
+  // plan='free' + status='trialing' is the CANONICAL card-less-trial pair
+  // (2026-07 audit #12, formerly "known data bug M3"): `plan` is the Stripe
+  // price on file — during a no-card trial none has been chosen (monthly vs
+  // annual doesn't exist yet), so it stays 'free'; `status` carries the
+  // lifecycle, and all gating keys off status. The full pairing matrix is
+  // enforced by a check constraint since migration 0041.
   const { error } = await serviceClient.from('club_subscriptions').insert({
     club_id: clubId,
     plan: 'free',

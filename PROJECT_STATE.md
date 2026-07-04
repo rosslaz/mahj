@@ -116,7 +116,7 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 `auth.users` via `auth_user_id`). Membership is `club_members` (owner/admin/member).
 
 - Full consolidated schema: `schema.sql` (regenerated from the live DB; reflects
-  baseline + migrations through **0039** (0040 pending — see open items)). Regenerate it (don't hand-edit) after
+  baseline + migrations through **0041**). Regenerate it (don't hand-edit) after
   applying new migrations, and bump the migration number on this line to match the
   highest applied migration.
 - Migrations 0002–0010 are pre-baseline v1.x history (players/leagues/game_nights →
@@ -245,13 +245,22 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Current status / open items
 
-- **PENDING MIGRATION 0040** (`events_update` → host/admin only) — created
-  2026-07-04, **NOT applied**; the file is in the repo. Sequence matters:
-  deploy the code containing the claim_event_host page change FIRST, then
-  apply 0040 (SQL editor or ask Claude — Supabase MCP). Applying early
-  silently breaks the deployed "Host this night" button (member UPDATE
-  filtered to 0 rows, no error). After applying, update the marked
-  events_update block in schema.sql and bump the through-line to 0040.
+- **Audit #9–#12 closed 2026-07-04:**
+  - **#9** (schema.sql missing provision_user_row) — was already resolved by the
+    2026-07-04 schema re-sync; re-verified (7 references present).
+  - **#10** — `/c/[slug]/a/new` date defaults now use `etToday()` instead of UTC
+    `toISOString()` (the M-2 sweep had missed this page; every US-evening user
+    got tomorrow's date).
+  - **#11** — `useClub`/`useActivity` now retry transient failures (3 attempts,
+    backoff) and expose `error` + `retry()` distinct from `notFound`; both
+    layouts render a "Connection Trouble / Try again" screen instead of a
+    confident "Not Found" on load failure; a failed membership sub-query is a
+    load failure, not silent demotion to visitor. Event page: first-load
+    failures get the same treatment ("not found" previously showed on a blip
+    before any state existed). Residual (accepted): hooks are per-component,
+    so a page's own instance can fail while the layout's succeeded — the real
+    fix is a ClubProvider context, same family as low-tier #14's AuthProvider.
+  - **#12** — see the RESOLVED M3 note under Known data bugs (migration 0041).
 - **Email from-header + events RLS fixes shipped 2026-07-04** (2026-07 audit
   items #6 + #8):
   - **#6:** `.env.example` documented `RESEND_FROM_EMAIL=Pungctual <hello@...>`
@@ -266,7 +275,12 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
     2026-07-04, rolled-back test: 8 assertions incl. concurrent-claim lock,
     address copy, and the WITH CHECK release-host snapshot subtlety) carries
     the one legitimate member write; the page's claimHost now calls it; 0040
-    (pending, above) tightens the policy to can_manage_event(id).
+    applied 2026-07-04 AFTER the code deploy (zero-downtime sequence) and
+    verified against pg_policies — events_update is now host/admin only.
+    Note: events_INSERT stays member-wide by design ("members can create
+    normal events; only admins create hidden ones" — 0032 trigger backstops
+    the hidden variant); checked and confirmed intentional, not an #8-class
+    gap.
     send-invites' invite_sequence bump and release/complete/reopen all pass
     can_manage_event; notifications-cron writes are service-role.
 
@@ -363,11 +377,13 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
   hotfix duplication); requireClubOwner auth-helper extraction; Supabase type
   generation (many `as any`); a DB trigger for subscription auto-provisioning;
   billing_events audit log; 3-day trial reminder.
-- **Known data bug (M3, not urgent):** at least one `club_subscriptions` row has the
-  incoherent pair `plan='free'` + `status='trialing'`. Gating still works (`club_is_pro`
-  keys off status), but the combination is contradictory and points at the trial path
-  in `billing-provision.ts` setting status without a matching plan. Worth fixing before
-  real subscription volume so billing reporting isn't confused.
+- **RESOLVED (was "known data bug M3"):** `plan='free'` + `status='trialing'` is
+  the CANONICAL card-less-trial pair, not a bug — `plan` is the Stripe price on
+  file (none chosen during a no-card trial), `status` is lifecycle, gating keys
+  off status. Canonicalized + enforced by the check constraint in migration 0041
+  (applied 2026-07-04, negative-tested); pairing matrix documented in the
+  migration and in live column comments. billing-provision.ts documents it at
+  the insert site.
 - **Code-audit leftovers** (see `CODE_AUDIT_2026-06-10.md`; H-1/H-2/H-3, M-1, M-2,
   and L-1 were fixed 2026-06-11 — note the audit's M-3 is unrelated to the data-bug
   M3 above):

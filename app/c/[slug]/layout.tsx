@@ -16,6 +16,17 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   if (cb.loading || auth.loading) {
     return <p className="text-ink/60 italic">Loading club…</p>;
   }
+  if (cb.error) {
+    // Load failure ≠ not found (audit #11): the hook already retried;
+    // offer a manual retry instead of a confident "Club Not Found".
+    return (
+      <div className="max-w-md mx-auto text-center pt-10">
+        <h1 className="font-display text-4xl mb-4">Connection Trouble</h1>
+        <p className="text-ink/60 mb-6">{cb.error}</p>
+        <button onClick={cb.retry} className="btn btn-jade">Try again</button>
+      </div>
+    );
+  }
   if (cb.notFound) {
     return (
       <div className="max-w-md mx-auto text-center pt-10">

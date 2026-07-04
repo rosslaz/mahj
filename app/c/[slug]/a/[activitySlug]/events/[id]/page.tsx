@@ -119,6 +119,11 @@ function EventDetailPageInner() {
   // themselves (approved count; night_signups select only shows them their
   // own rows). Cleared whenever the direct fetch succeeds.
   const [previewMeta, setPreviewMeta] = useState<{ approvedCount: number } | null>(null);
+  // First-load failure flag (audit #11 tail): the error-vs-empty handling in
+  // load() protects REFRESHES (keeps stale state), but on a first load there
+  // is no state to keep — night stays null and the page showed "Game night
+  // not found" for a network blip.
+  const [loadError, setLoadError] = useState(false);
   const [eventInvites, setEventInvites] = useState<EventInvite[]>([]);
   // Spinner states for invitation actions
   const [respondingToInvite, setRespondingToInvite] = useState(false);
@@ -173,9 +178,11 @@ function EventDetailPageInner() {
     // an error and the page fell to "not found" on any transient failure.
     if (nightRes.error) {
       console.error('Event fetch error:', nightRes.error);
+      setLoadError(true);
       setLoading(false);
       return;
     }
+    setLoadError(false);
     if (!nightRes.data) {
       // Not visible under RLS. For a signed-in NON-MEMBER this is the normal
       // state for a public event — events_select deliberately has no public
@@ -306,7 +313,16 @@ function EventDetailPageInner() {
   // data in place instead of blanking to "Loading…" and resetting scroll
   // (UX audit U-3).
   if (loading && !night) return <p className="text-ink/60 italic">Loading game night…</p>;
-  if (!night) return <p className="text-ink/60 italic">Game night not found.</p>;
+  if (!night) {
+    return loadError ? (
+      <div className="text-center pt-6 space-y-4">
+        <p className="text-ink/60 italic">Couldn&apos;t load this game night — check your connection.</p>
+        <button onClick={() => load()} className="btn btn-ghost">Try again</button>
+      </div>
+    ) : (
+      <p className="text-ink/60 italic">Game night not found.</p>
+    );
+  }
 
   const isHost = !!auth.userId && night.host_player_id === auth.userId;
   const canManage = isHost || cb.isAdmin;

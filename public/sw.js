@@ -17,7 +17,7 @@
  * fresh cache so users don't get pinned to old HTML forever.
  */
 
-const CACHE_VERSION = 'v2.22.2';     // bump on every deploy
+const CACHE_VERSION = 'v2.22.4';     // bump on every deploy
 const STATIC_CACHE = `pungctual-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `pungctual-runtime-${CACHE_VERSION}`;
 

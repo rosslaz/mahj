@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getBrowserSupabase } from './supabase-browser';
 
 export type ActivityType = 'league' | 'tournament' | 'class' | 'open_play';
@@ -43,36 +43,62 @@ export function activityHasScoring(type: ActivityType): boolean {
 export type ActivityContextState = {
   loading: boolean;
   activity: Activity | null;
+  // Definitively no such activity (query succeeded, zero rows).
   notFound: boolean;
+  // Load failure after internal retries — distinct from notFound
+  // (2026-07 audit #11; see use-club.ts for the full note).
+  error: string | null;
+  retry: () => void;
 };
+
+const MAX_ATTEMPTS = 3;
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function useActivity(clubId: string | undefined | null, activitySlug: string | undefined | null): ActivityContextState {
   const supabase = getBrowserSupabase();
-  const [state, setState] = useState<ActivityContextState>({ loading: true, activity: null, notFound: false });
+  const [reloadKey, setReloadKey] = useState(0);
+  const retry = useCallback(() => setReloadKey((k) => k + 1), []);
+  const [state, setState] = useState<Omit<ActivityContextState, 'retry'>>({
+    loading: true, activity: null, notFound: false, error: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
     if (!clubId || !activitySlug) {
-      setState({ loading: false, activity: null, notFound: !!activitySlug });
+      setState({ loading: false, activity: null, notFound: !!activitySlug, error: null });
       return;
     }
+    setState((s) => ({ ...s, loading: true, error: null }));
     (async () => {
-      const { data } = await supabase
-        .from('activities')
-        .select('*')
-        .eq('club_id', clubId)
-        .eq('slug', activitySlug)
-        .is('deleted_at', null)
-        .maybeSingle();
-      if (cancelled) return;
-      if (!data) {
-        setState({ loading: false, activity: null, notFound: true });
+      let lastError = '';
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        if (attempt > 1) await delay(attempt === 2 ? 400 : 1200);
+        if (cancelled) return;
+        const res = await supabase
+          .from('activities')
+          .select('*')
+          .eq('club_id', clubId)
+          .eq('slug', activitySlug)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (cancelled) return;
+        if (res.error) { lastError = res.error.message; continue; }
+        if (!res.data) {
+          setState({ loading: false, activity: null, notFound: true, error: null });
+          return;
+        }
+        setState({ loading: false, activity: res.data as Activity, notFound: false, error: null });
         return;
       }
-      setState({ loading: false, activity: data as Activity, notFound: false });
+      if (cancelled) return;
+      console.warn('[useActivity] load failed after retries:', lastError);
+      setState({
+        loading: false, activity: null, notFound: false,
+        error: "Couldn't load the activity — check your connection.",
+      });
     })();
     return () => { cancelled = true; };
-  }, [clubId, activitySlug, supabase]);
+  }, [clubId, activitySlug, supabase, reloadKey]);
 
-  return state;
+  return { ...state, retry };
 }

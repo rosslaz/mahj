@@ -2,14 +2,19 @@
 -- Pungctual — consolidated schema (authoritative baseline)
 --
 -- GENERATED FROM THE LIVE PRODUCTION DATABASE (project sypzvuolnxnbdtghafsa)
--- reflecting the end state of migrations 0002–0039.
--- (0040 exists in the repo but is PENDING — see the events_update policy note.) This file is the source
+-- reflecting the end state of migrations 0002–0041. This file is the source
 -- of truth for "what the database actually looks like" and can rebuild a
 -- fresh project end-to-end.
 --
--- Last synced 2026-07-04 (fourth pass, after 0039): claim_event_host RPC
--- added. events_update is still the member-wide policy in the live DB —
--- 0040 tightens it and is applied only after the claim-host code deploys.
+-- Last synced 2026-07-04 (sixth pass, after 0041): plan/status column
+-- comments + club_subscriptions_plan_status_coherent check constraint
+-- added; constraint negative-tested against the live table (rolled back).
+--
+-- Fifth pass same day (after 0040): events_update tightened
+-- to can_manage_event(id) (using + with check), applied post-deploy and
+-- verified against pg_policies. Audit #8 closed.
+--
+-- Fourth pass same day (after 0039): claim_event_host RPC added.
 --
 -- Third pass same day (after 0038): enforce_free_tier_admin_cap
 -- trigger fn + trigger added, verified against the live catalogs and
@@ -212,6 +217,19 @@ create table if not exists club_subscriptions (
   trial_reminder_7d_sent_at timestamptz,
   trial_reminder_1d_sent_at timestamptz
 );
+-- 0041 (audit #12): plan = the Stripe price on file ('free' during a
+-- card-less trial — no price chosen yet); status = lifecycle; gating keys
+-- off status. The constraint enforces the full pairing matrix (see 0041).
+comment on column public.club_subscriptions.plan is
+  'The Stripe price on file: free | pro_monthly | pro_annual | pro_grandfathered. During a card-less trial this stays ''free'' (no price chosen yet); status carries the trial. Canonicalized + constrained in 0041 (audit #12).';
+comment on column public.club_subscriptions.status is
+  'Lifecycle state: free | trialing | active | past_due | canceled | grandfathered. All gating (club_is_pro) keys off status, never plan. See the plan/status matrix in migration 0041.';
+alter table public.club_subscriptions
+  add constraint club_subscriptions_plan_status_coherent check (
+    (plan = 'free' and status in ('free', 'trialing'))
+    or (plan in ('pro_monthly', 'pro_annual') and status in ('trialing', 'active', 'past_due', 'canceled'))
+    or (plan = 'pro_grandfathered' and status = 'grandfathered')
+  );
 
 create table if not exists launch_promo_counter (
   id integer not null default 1,
@@ -1306,10 +1324,12 @@ create policy activities_delete on public.activities for delete to public using 
 -- events
 create policy events_select on public.events for select to public using (((exists ( select 1 from club_members cm where ((cm.club_id = events.club_id) and (cm.user_id = current_user_id()) and (cm.role = any (array['owner'::text, 'admin'::text]))))) or (host_player_id = current_user_id()) or ((visibility = 'normal'::text) and is_club_member(club_id, 'member'::text)) or (exists ( select 1 from event_invites ei where ((ei.event_id = events.id) and (ei.invitee_user_id = current_user_id()) and (ei.status = any (array['pending'::text, 'accepted'::text]))))) or (exists ( select 1 from night_signups ns where ((ns.event_id = events.id) and (ns.player_id = current_user_id()) and (ns.status = 'approved'::text))))));
 create policy events_insert on public.events for insert to public with check (is_club_member(club_id, 'member'::text));
--- PENDING 0040: this member-wide policy is the LIVE state. 0040 replaces
--- it with using/with check (can_manage_event(id)) — apply 0040 only after
--- deploying the claim_event_host page change, then update this file.
-create policy events_update on public.events for update to public using (is_club_member(club_id, 'member'::text));
+-- 0040 (audit #8): host/admin only. Claim-host — the one legitimate
+-- plain-member event write — goes through the claim_event_host RPC (0039).
+-- WITH CHECK's can_manage_event is STABLE and evaluates against the
+-- pre-update row, so a host releasing hosting (host_player_id -> null)
+-- passes; verified by live test.
+create policy events_update on public.events for update to public using (can_manage_event(id)) with check (can_manage_event(id));
 create policy events_delete on public.events for delete to public using (is_club_member(club_id, 'admin'::text));
 
 -- event_invites

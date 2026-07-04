@@ -17,6 +17,7 @@ import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { NumberStepper } from '@/components/NumberStepper';
 import { validateZip } from '@/lib/address';
 import { computeSeriesDates } from '@/lib/game-utils';
+import { etToday } from '@/lib/dates';
 import { getNewActivityGateState } from '@/app/actions/billing-gates';
 import { createActivityGated } from '@/app/actions/gated-writes';
 
@@ -60,8 +61,11 @@ export default function NewActivityPage() {
   // STEP 2: event/series fields
   const [eventName, setEventName] = useState('');
   const [eventNameTouched, setEventNameTouched] = useState(false);
-  const [singleDate, setSingleDate] = useState(new Date().toISOString().slice(0, 10));
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  // ET, not UTC (audit #10 — the M-2 sweep missed this page):
+  // new Date().toISOString() flips to tomorrow's date every evening for US
+  // users, defaulting new activities to the wrong day.
+  const [singleDate, setSingleDate] = useState(etToday());
+  const [startDate, setStartDate] = useState(etToday());
   const [endDate, setEndDate] = useState('');
   const [intervalWeeks, setIntervalWeeks] = useState(1);
   const [time, setTime] = useState('');
