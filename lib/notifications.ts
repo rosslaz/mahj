@@ -401,55 +401,10 @@ export async function dispatchClubMemberJoined(opts: {
   );
 }
 
-/**
- * Someone left or was removed from a club. We only fire this for SELF-LEAVE
- * (the user clicked Leave themselves). For admin-removes, we don't notify
- * — that's a deliberate admin action, other admins find out from the members
- * list, no push spam needed.
- */
-export async function dispatchClubMemberLeft(opts: {
-  clubId: string;
-  leftUserId: string;
-  actorUserId: string;
-}): Promise<void> {
-  // If the actor isn't the same as the person leaving, this is an admin-remove.
-  // Skip per our design.
-  if (opts.leftUserId !== opts.actorUserId) return;
-
-  const { data: club } = await getServiceSupabase()
-    .from('clubs')
-    .select('id, slug, name')
-    .eq('id', opts.clubId)
-    .maybeSingle();
-  if (!club) return;
-
-  // Notify admins (the leaving user obviously knows they left)
-  const { data: adminRows } = await getServiceSupabase()
-    .from('club_members')
-    .select('user_id, role')
-    .eq('club_id', opts.clubId)
-    .in('role', ['owner', 'admin']);
-
-  const adminIds = ((adminRows as any[]) || [])
-    .map((r) => r.user_id as string)
-    .filter((id) => id !== opts.leftUserId);
-  if (adminIds.length === 0) return;
-
-  const leftName = await getUserName(opts.leftUserId) ?? 'A member';
-  const c = club as any;
-
-  await Promise.all(
-    adminIds.map((adminId) =>
-      sendPushToUser(adminId, {
-        title: `${leftName} left ${c.name}`,
-        body: '',
-        url: clubAdminUrl(c.slug),
-        tag: `member-left-${c.id}`,
-        category: 'club_membership',
-      })
-    )
-  );
-}
+// (dispatchClubMemberLeft was deleted in the 2026-07 audit #17 purge along
+// with its notifyClubMemberLeft action — fully built, zero callers. See the
+// note in app/actions/notifications.ts; resurrect both from git history if
+// self-service leave-club ships post-beta.)
 
 // ============================================================
 // EVENT REMINDERS (cron-driven)

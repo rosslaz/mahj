@@ -168,21 +168,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   };
 }
 
-/**
- * Fan out to multiple users. Used by the 24h reminder cron and other
- * many-recipients notifications.
- */
-export async function sendPushToUsers(userIds: string[], payload: PushPayload): Promise<DeliveryResult> {
-  if (userIds.length === 0) return { attempted: 0, delivered: 0, removedStale: 0 };
-  // Dedupe defensively
-  const unique = Array.from(new Set(userIds));
-  const results = await Promise.all(unique.map((id) => sendPushToUser(id, payload)));
-  return results.reduce(
-    (acc, r) => ({
-      attempted: acc.attempted + r.attempted,
-      delivered: acc.delivered + r.delivered,
-      removedStale: acc.removedStale + r.removedStale,
-    }),
-    { attempted: 0, delivered: 0, removedStale: 0 }
-  );
-}
+// (A sendPushToUsers fan-out helper was deleted in the 2026-07 audit #17
+// purge — zero callers. The reminder cron fans out per-attendee via
+// dispatchEventReminder in lib/notifications.ts; if a many-recipients
+// helper is needed again, it's three lines over sendPushToUser.)

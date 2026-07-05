@@ -62,19 +62,9 @@ export type StructuredAddress = {
   address?: string | null;
 };
 
-// Render an address for display.
-export function formatAddress(a: StructuredAddress | null | undefined): string {
-  if (!a) return '';
-  const { street, city, state, zip, address } = a;
-  const hasStructured = !!(street || city || state || zip);
-  if (!hasStructured && address) return address;
-  const cityStateZip = [city, [state, zip].filter(Boolean).join(' ')]
-    .filter((s) => s && s.trim())
-    .join(', ');
-  return [street, cityStateZip].filter((s) => s && s.trim()).join(', ');
-}
-
 // Multi-line variant for layouts that want street on one line, city/state/zip on the next.
+// (A single-line formatAddress sibling was deleted in the 2026-07 audit #17
+// purge — zero callers; everything renders via the lines variant.)
 export function formatAddressLines(a: StructuredAddress | null | undefined): string[] {
   if (!a) return [];
   const { street, city, state, zip, address } = a;

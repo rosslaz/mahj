@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { useClub } from '@/lib/use-club';
+import { useClub, ClubProvider } from '@/lib/use-club';
 import { useAuth } from '@/lib/use-auth';
 
 export default function ClubLayout({ children }: { children: React.ReactNode }) {
@@ -86,10 +86,13 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   // layout takes over completely with its own breadcrumb.
   const insideActivity = pathname.startsWith(`${base}/a/`);
   if (insideActivity) {
-    return <>{children}</>;
+    // Provide the shared club instance even without club chrome — the
+    // activity layout and pages beneath read it via useClub (audit #14).
+    return <ClubProvider slug={slug} value={cb}>{children}</ClubProvider>;
   }
 
   return (
+    <ClubProvider slug={slug} value={cb}>
     <div className="space-y-8">
       <div className="border-b border-ink/10 pb-4 -mt-4">
         {/* Compact breadcrumb: My Clubs / Club Name */}
@@ -127,6 +130,7 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
 
       {children}
     </div>
+    </ClubProvider>
   );
 }
 

@@ -20,7 +20,8 @@ export function formatTime12(t: string | null | undefined): string {
 }
 
 export type Wind = 'E' | 'S' | 'W' | 'N';
-export const WIND_ORDER: Wind[] = ['E', 'S', 'W', 'N'];
+// (WIND_ORDER was deleted in the 2026-07 audit #17 purge — zero callers;
+// the event page uses WIND_LABEL/windForGame, never the raw order array.)
 
 export const WIND_LABEL: Record<Wind, string> = {
   E: 'East',

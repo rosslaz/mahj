@@ -6,6 +6,7 @@ import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
 import AppBadgeManager from '@/components/AppBadgeManager';
 import LegalGate from '@/components/LegalGate';
+import { AuthProvider } from '@/lib/use-auth';
 
 export const metadata: Metadata = {
   title: 'Pungctual',
@@ -40,6 +41,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        {/* Single app-wide auth subscription (audit #14) — every useAuth()
+            below reads this one instance instead of running its own
+            listener + users-row lookup. */}
+        <AuthProvider>
         <header className="border-b border-ink/15">
           <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
             <Link href="/" className="flex items-center group" aria-label="Pungctual home">
@@ -78,6 +83,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <InstallPrompt />
         <AppBadgeManager />
         <LegalGate />
+        </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

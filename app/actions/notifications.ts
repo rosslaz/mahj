@@ -8,7 +8,6 @@ import {
   dispatchPlayerRemovedByHost,
   dispatchPlayerAddedByHost,
   dispatchClubMemberJoined,
-  dispatchClubMemberLeft,
 } from '@/lib/notifications';
 
 // Each notify* function resolves the caller's users.id and delegates to the
@@ -103,16 +102,8 @@ export async function notifyClubMemberJoined(clubId: string, newMemberUserId: st
   }
 }
 
-/**
- * Call after a member leaves or is removed from a club. The dispatcher
- * decides whether to notify based on actor vs. left user.
- */
-export async function notifyClubMemberLeft(clubId: string, leftUserId: string): Promise<void> {
-  const actorUserId = await getCallerUserId();
-  if (!actorUserId) return;
-  try {
-    await dispatchClubMemberLeft({ clubId, leftUserId, actorUserId });
-  } catch (e) {
-    console.error('[notifyClubMemberLeft]', e);
-  }
-}
+// (notifyClubMemberLeft was deleted in the 2026-07 audit #17 purge — it was
+// fully built but called by NOTHING: admin-removes deliberately don't notify,
+// and there's no self-service leave-club. If leave-club ships post-beta,
+// resurrect the pair from git history: this action + dispatchClubMemberLeft
+// in lib/notifications.ts, deleted the same day.)

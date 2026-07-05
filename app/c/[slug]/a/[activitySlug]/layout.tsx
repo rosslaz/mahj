@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useClub } from '@/lib/use-club';
-import { useActivity, ACTIVITY_TYPE_LABEL, activityHasScoring } from '@/lib/use-activity';
+import { useActivity, ACTIVITY_TYPE_LABEL, activityHasScoring, ActivityProvider } from '@/lib/use-activity';
 
 export default function ActivityLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
@@ -73,6 +73,7 @@ export default function ActivityLayout({ children }: { children: React.ReactNode
   }
 
   return (
+    <ActivityProvider clubId={act.activity.club_id} activitySlug={activitySlug} value={act}>
     <div className="space-y-8">
       <div className="border-b border-ink/10 pb-4 -mt-4">
         {/* Full path breadcrumb: My Clubs / Lazar / Tuesday League */}
@@ -105,5 +106,6 @@ export default function ActivityLayout({ children }: { children: React.ReactNode
 
       {children}
     </div>
+    </ActivityProvider>
   );
 }

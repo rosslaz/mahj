@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { getBrowserSupabase } from './supabase-browser';
 import { useAuth } from './use-auth';
 
@@ -46,7 +54,55 @@ const EMPTY = {
 const MAX_ATTEMPTS = 3;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ============================================================
+// Shared-instance context (audit #14 + the #11 residual)
+//
+// The club layout runs ONE real instance of the hook and provides it here;
+// every useClub(slug) call underneath (the activity layout, the page, any
+// panel) reads the shared state instead of running its own queries. That
+// kills the N-instances-per-page duplication AND the #11 residual where a
+// page's own instance could fail while the layout's succeeded — there is
+// only one instance to fail now, and the layout owns the error screen.
+//
+// Trade-off, documented in PROJECT_STATE: club/role data is now cached for
+// the layout's lifetime instead of refetching on every in-club page
+// navigation. A mid-session role change shows up on the next entry into the
+// club (or retry), not the next page click.
+// ============================================================
+
+const ClubContext = createContext<(ClubContextState & { slug: string }) | null>(null);
+
+/** Mounted by the club layout around its children. Plain createElement so
+ *  this file can stay .ts. */
+export function ClubProvider({
+  slug,
+  value,
+  children,
+}: {
+  slug: string;
+  value: ClubContextState;
+  children: ReactNode;
+}) {
+  return createElement(ClubContext.Provider, { value: { ...value, slug } }, children);
+}
+
+/**
+ * Context-aware: if a ClubProvider for THIS slug is above us, return the
+ * shared state; otherwise run standalone (the layout itself, and any
+ * component rendered outside a club tree). Signature and return shape are
+ * unchanged from the pre-provider version, so no consumer changed.
+ */
 export function useClub(slug: string | undefined | null): ClubContextState {
+  const ctx = useContext(ClubContext);
+  const provided = ctx && slug && ctx.slug === slug ? ctx : null;
+  // Hooks must run unconditionally: when the provider matches, run the
+  // standalone hook with a null slug — its early branch sets static state
+  // and performs no queries — purely to keep hook order stable.
+  const standalone = useClubStandalone(provided ? null : slug);
+  return provided ?? standalone;
+}
+
+function useClubStandalone(slug: string | undefined | null): ClubContextState {
   const auth = useAuth();
   const supabase = getBrowserSupabase();
   const [reloadKey, setReloadKey] = useState(0);

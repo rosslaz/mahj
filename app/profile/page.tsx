@@ -76,8 +76,8 @@ function ProfilePageInner() {
 
   function validate(): string | null {
     if (!name.trim()) return 'Name is required.';
-    if (!email.trim()) return 'Email is required.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Please enter a valid email address.';
+    // Email is read-only (change requires support), so it isn't validated
+    // here — the dead validation went in the 2026-07 audit #17 purge.
     // Phone now optional at the platform level (was required only at registration).
     if (phone.trim()) {
       const digits = phone.replace(/\D/g, '');
@@ -90,14 +90,12 @@ function ProfilePageInner() {
 
   const dirty = !!user && (
     name.trim() !== user.name ||
-    email.trim().toLowerCase() !== user.email ||
     phone.trim() !== (user.phone || '') ||
     addr.street.trim() !== (user.street || '') ||
     addr.city.trim() !== (user.city || '') ||
     addr.state !== (user.state || '') ||
     addr.zip.trim() !== (user.zip || '')
   );
-  const emailChanged = !!user && email.trim().toLowerCase() !== user.email;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -106,22 +104,17 @@ function ProfilePageInner() {
     if (v) { setError(v); return; }
     if (!user) return;
 
-    if (emailChanged) {
-      const ok = confirm(
-        `You're changing your email from ${user.email} to ${email.trim().toLowerCase()}.\n\n` +
-        `Future sign-in links will go to the new address. You'll need to sign in again with the new email after saving. Continue?`
-      );
-      if (!ok) return;
-    }
-
+    // The entire email-change flow (confirm → users update → auth.updateUser
+    // with rollback) was deleted in the 2026-07 audit #17 purge: the email
+    // input has been readOnly+disabled since email changes moved to support,
+    // so emailChanged could never be true and none of it was reachable —
+    // including a native confirm() the U-6 sweep couldn't otherwise remove.
     setSaving(true);
-    const newEmail = email.trim().toLowerCase();
 
     const { error: userErr } = await supabase
       .from('users')
       .update({
         name: name.trim(),
-        email: newEmail,
         phone: phone.trim() || null,
         street: addr.street.trim() || null,
         city: addr.city.trim() || null,
@@ -131,29 +124,16 @@ function ProfilePageInner() {
       .eq('id', user.id);
 
     if (userErr) {
-      setError(userErr.code === '23505' ? 'That email is already in use by another account.' : userErr.message);
+      setError(userErr.message);
       setSaving(false);
       return;
     }
 
-    if (emailChanged) {
-      const { error: authErr } = await supabase.auth.updateUser({ email: newEmail });
-      if (authErr) {
-        // Roll back the users row
-        await supabase.from('users').update({ email: user.email }).eq('id', user.id);
-        setError('Could not update sign-in email: ' + authErr.message);
-        setSaving(false);
-        return;
-      }
-      setSuccess('Profile saved. Check your new email to confirm the change.');
-    } else {
-      setSuccess('Profile saved.');
-    }
+    setSuccess('Profile saved.');
 
     setUser({
       ...user,
       name: name.trim(),
-      email: newEmail,
       phone: phone.trim() || null,
       street: addr.street.trim() || null,
       city: addr.city.trim() || null,

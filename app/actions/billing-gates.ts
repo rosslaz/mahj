@@ -8,10 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  canAddMember as gateAddMember,
-  canCreateActivity as gateCreateActivity,
   canCreateHiddenEvent as gateCreateHiddenEvent,
-  canSendEmailInvites as gateSendEmailInvites,
   canPromoteAdmin as gatePromoteAdmin,
   getClubBillingStatus,
   FREE_TIER_LIMITS,
@@ -19,26 +16,13 @@ import {
 
 type Result = { ok: true } | { ok: false; error: string };
 
-export async function checkCanAddMember(clubId: string): Promise<Result> {
-  const r = await gateAddMember(clubId);
-  return r.allowed ? { ok: true } : { ok: false, error: r.reason };
-}
-
-export async function checkCanCreateActivity(
-  clubId: string,
-  activityType: 'league' | 'tournament' | 'class' | 'open_play'
-): Promise<Result> {
-  const r = await gateCreateActivity(clubId, activityType);
-  return r.allowed ? { ok: true } : { ok: false, error: r.reason };
-}
+// (checkCanAddMember / checkCanCreateActivity / checkCanSendEmailInvites were
+// deleted in the 2026-07 audit #17 purge — zero callers. Those gates run
+// through lib/billing directly (server actions) or gated-writes; only the
+// page-level pre-checks below are consumed from this file.)
 
 export async function checkCanCreateHiddenEvent(clubId: string): Promise<Result> {
   const r = await gateCreateHiddenEvent(clubId);
-  return r.allowed ? { ok: true } : { ok: false, error: r.reason };
-}
-
-export async function checkCanSendEmailInvites(clubId: string): Promise<Result> {
-  const r = await gateSendEmailInvites(clubId);
   return r.allowed ? { ok: true } : { ok: false, error: r.reason };
 }
 

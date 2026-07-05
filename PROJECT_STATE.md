@@ -245,6 +245,36 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Current status / open items
 
+- **Release 3 of the low tier shipped 2026-07-04** (audit #14, the #11
+  residual, #17 — the providers + dead-code release; ships alone by design):
+  - **#14:** `AuthProvider` mounted once in app/layout.tsx; `useAuth()` is now
+    a context read (throws loudly if the provider is missing — deliberate,
+    a silent fallback would blank pages undiagnosably). One auth listener +
+    one users-row lookup per app instead of 4–6 per page. Zero consumer
+    changes — identical signature and return shape.
+  - **#11 residual:** `ClubProvider`/`ActivityProvider` mounted by the two
+    layouts; `useClub`/`useActivity` are context-aware (matching provider
+    above → shared instance; otherwise standalone — hooks run
+    unconditionally with a null key to satisfy the rules). One instance per
+    club visit; the page-fails-while-layout-succeeds divergence is gone.
+    TRADE-OFF (accepted): club/role data is cached for the layout's
+    lifetime, not refetched per in-club page navigation — a mid-session
+    role change appears on next club entry, not next click.
+  - **#17 purge (verified against the FULL current tree first — the audit
+    list had errors):** deleted WIND_ORDER (game-utils), formatAddress
+    (address.ts), sendPushToUsers (push-server), checkCanAddMember /
+    checkCanCreateActivity / checkCanSendEmailInvites (billing-gates — the
+    FILE stays, 3 pages import its other exports), the
+    notifyClubMemberLeft + dispatchClubMemberLeft pair (fully built, zero
+    callers; resurrect from git history if self-service leave-club ships
+    post-beta), profile's entire unreachable email-change flow (incl. the
+    last native confirm() — #15 sweep now COMPLETE), and the events page's
+    byte-identical local computeSeriesDates (delegates to lib).
+    NOT deleted despite the audit listing them: formatTime (real name
+    formatTime12, 6 callers), shuffle/WIND_LABEL/windForGame/
+    assignPlayersToTables (event page imports all four).
+    `readme.md.old` requires manual `git rm` (connector has no delete).
+
 - **Release 2 of the low tier shipped 2026-07-04** (audit #18, #19, #20, #22 —
   the notifications-correctness batch; sw.js touched, CACHE_VERSION restamps
   automatically at build):

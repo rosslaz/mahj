@@ -7,7 +7,7 @@ import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/lib/use-auth';
 import { useClub } from '@/lib/use-club';
 import { useActivity } from '@/lib/use-activity';
-import { formatTime12 } from '@/lib/game-utils';
+import { formatTime12, computeSeriesDates as computeSeriesDatesLib } from '@/lib/game-utils';
 import { AddressFields, AddressFieldsValue } from '@/components/AddressFields';
 import { validateZip } from '@/lib/address';
 import { sendEventInvitations } from '@/app/actions/event-invites';
@@ -264,22 +264,12 @@ export default function ActivityEventsPage() {
   // Compute the dates a series will produce. The series starts on
   // sStartDate (whatever weekday that is) and repeats every
   // sIntervalWeeks weeks until — and including — sEndDate.
+  //
+  // Audit #17: this page carried a byte-identical local copy of the lib
+  // implementation (same guards, same 52-occurrence cap). Delegate; the
+  // local name stays so the three call sites don't change.
   function computeSeriesDates(): string[] {
-    if (!sStartDate || !sEndDate) return [];
-    const start = new Date(sStartDate + 'T00:00:00');
-    const end = new Date(sEndDate + 'T00:00:00');
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
-    if (end < start) return [];
-    if (sIntervalWeeks < 1 || sIntervalWeeks > 12) return [];
-
-    const dates: string[] = [];
-    const cursor = new Date(start);
-    const MAX_OCCURRENCES = 52;
-    while (cursor <= end && dates.length < MAX_OCCURRENCES) {
-      dates.push(cursor.toISOString().slice(0, 10));
-      cursor.setDate(cursor.getDate() + sIntervalWeeks * 7);
-    }
-    return dates;
+    return computeSeriesDatesLib(sStartDate, sEndDate, sIntervalWeeks);
   }
 
   function formatWeekday(dateStr: string): string {

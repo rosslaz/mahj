@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { getBrowserSupabase } from './supabase-browser';
 
 export type ActivityType = 'league' | 'tournament' | 'class' | 'open_play';
@@ -54,7 +62,52 @@ export type ActivityContextState = {
 const MAX_ATTEMPTS = 3;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function useActivity(clubId: string | undefined | null, activitySlug: string | undefined | null): ActivityContextState {
+// Shared-instance context — same pattern and rationale as ClubContext in
+// use-club.ts (audit #14 + the #11 residual). The activity layout provides;
+// pages underneath read the shared state.
+const ActivityContext = createContext<
+  (ActivityContextState & { clubId: string; activitySlug: string }) | null
+>(null);
+
+/** Mounted by the activity layout around its children. */
+export function ActivityProvider({
+  clubId,
+  activitySlug,
+  value,
+  children,
+}: {
+  clubId: string;
+  activitySlug: string;
+  value: ActivityContextState;
+  children: ReactNode;
+}) {
+  return createElement(ActivityContext.Provider, { value: { ...value, clubId, activitySlug } }, children);
+}
+
+/**
+ * Context-aware: returns the layout's shared instance when its keys match;
+ * otherwise runs standalone. Signature and return shape unchanged.
+ */
+export function useActivity(
+  clubId: string | undefined | null,
+  activitySlug: string | undefined | null,
+): ActivityContextState {
+  const ctx = useContext(ActivityContext);
+  const provided =
+    ctx && clubId && activitySlug && ctx.clubId === clubId && ctx.activitySlug === activitySlug
+      ? ctx
+      : null;
+  const standalone = useActivityStandalone(
+    provided ? null : clubId,
+    provided ? null : activitySlug,
+  );
+  return provided ?? standalone;
+}
+
+function useActivityStandalone(
+  clubId: string | undefined | null,
+  activitySlug: string | undefined | null,
+): ActivityContextState {
   const supabase = getBrowserSupabase();
   const [reloadKey, setReloadKey] = useState(0);
   const retry = useCallback(() => setReloadKey((k) => k + 1), []);

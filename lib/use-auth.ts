@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { getBrowserSupabase } from './supabase-browser';
 
 export type AuthState = {
@@ -18,7 +25,22 @@ function placeholderNameFromEmail(email: string): string {
   return email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function useAuth(): AuthState {
+const AuthContext = createContext<AuthState | null>(null);
+
+/**
+ * Single app-wide auth subscription (audit #14). useAuth used to be a
+ * standalone hook: every mounting component (UserMenu, club layout, activity
+ * layout, the page itself, panels — 4-6 per page) created its OWN
+ * onAuthStateChange listener and re-ran the users-row lookup, including the
+ * link_auth_to_user RPC and the self-heal insert path, in parallel on every
+ * page load. This provider runs that machinery exactly once at the root;
+ * useAuth() is now a context read with an unchanged return shape, so no
+ * consumer changed.
+ *
+ * Mounted once in app/layout.tsx. Plain createElement instead of JSX so this
+ * file can stay .ts.
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     loading: true,
     email: null,
@@ -132,5 +154,16 @@ export function useAuth(): AuthState {
     };
   }, []);
 
-  return state;
+  return createElement(AuthContext.Provider, { value: state }, children);
+}
+
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    // Loud by design: a missing provider means the app/layout.tsx wiring
+    // broke. Failing soft (a permanent loading:true) would blank every page
+    // silently, which is far harder to diagnose than this message.
+    throw new Error('useAuth() requires <AuthProvider> (mounted in app/layout.tsx).');
+  }
+  return ctx;
 }
