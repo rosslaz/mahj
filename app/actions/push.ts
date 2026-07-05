@@ -93,10 +93,11 @@ export async function sendTestPush(): Promise<Result<{ delivered: number; attemp
       body: 'Push notifications are working on this device.',
       url: '/profile',
       tag: 'test-push',
-      // Test pushes ignore category prefs by using a category the user can't disable;
-      // we just pick signup_activity which is most likely to be enabled.
-      // (Future: dedicated 'test' category that bypasses prefs.)
-      category: 'signup_activity',
+      // 'test' bypasses the category gate (audit #19): the old
+      // signup_activity choice made this button report "no devices" to
+      // anyone who'd disabled that category. Sound/vibration prefs still
+      // apply, so the test reflects real settings.
+      category: 'test',
     });
     return { ok: true, data: { delivered: res.delivered, attempted: res.attempted } };
   } catch (e: any) {

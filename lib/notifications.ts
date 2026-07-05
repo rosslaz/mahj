@@ -626,19 +626,30 @@ export async function runReminderSweep(opts?: { todayDateOverride?: string }): P
           // Stamp the timestamp even on zero-attendee events so we don't
           // re-query them on the next cron tick.
           const stampNow = new Date().toISOString();
-          await getServiceSupabase()
+          const { error: stampErr } = await getServiceSupabase()
             .from('events')
             .update({ reminder_sent_at: stampNow })
             .eq('id', ev.id);
+          if (stampErr) {
+            // The pushes already went out but the stamp didn't stick — the
+            // next tick WILL re-remind these attendees. Can't unsend;
+            // surface it loudly instead of swallowing (audit #22 sibling).
+            errors.push(`Event ${ev.id}: reminded but stamp FAILED (${stampErr.message}) — attendees will be re-notified next tick.`);
+          }
           return r;
         } catch (e: any) {
+          // Audit #22: a dispatch failure used to fall through here as a
+          // fulfilled zero-result and get COUNTED as reminded. (The stamp
+          // was correctly skipped, so the retry-next-tick behavior always
+          // worked — only the eventsReminded count lied.) Return null so
+          // the tally below skips it.
           errors.push(`Event ${ev.id}: ${e?.message ?? e}`);
-          return { attendeesAttempted: 0, pushesDelivered: 0 };
+          return null;
         }
       })
     );
     for (const result of batchResults) {
-      if (result.status === 'fulfilled') {
+      if (result.status === 'fulfilled' && result.value !== null) {
         totalReminded += 1;
         totalDelivered += result.value.pushesDelivered;
       }

@@ -24,7 +24,11 @@ export type PushPayload = {
   body: string;
   url?: string;
   tag?: string;
-  category: NotificationCategory;
+  // 'test' bypasses the per-category preference gate (audit #19): the test
+  // button exists to verify the pipe, and gating it on signup_activity made
+  // it report "no devices" to anyone who'd disabled that category. Sound and
+  // vibration prefs still apply — a test should reflect real settings.
+  category: NotificationCategory | 'test';
 };
 
 let vapidConfigured = false;
@@ -79,7 +83,9 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     .maybeSingle();
 
   // If no prefs row exists, defaults are all-on (matches schema defaults).
-  const categoryEnabled = prefs ? (prefs as any)[payload.category] !== false : true;
+  // 'test' bypasses the category gate (see PushPayload.category).
+  const categoryEnabled =
+    payload.category === 'test' || (prefs ? (prefs as any)[payload.category] !== false : true);
   if (!categoryEnabled) {
     return { attempted: 0, delivered: 0, removedStale: 0 };
   }
@@ -96,12 +102,17 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
 
   // 3. Build the JSON payload (max ~4KB per Web Push spec)
   const silent = prefs ? (prefs as any).sound === false : false;
+  // Audit #18: the vibration pref was stored but never shipped in the
+  // payload — the service worker had nothing to honor. false → sw.js sets
+  // vibrate: [] (explicitly none).
+  const vibrate = prefs ? (prefs as any).vibration !== false : true;
   const body = JSON.stringify({
     title: payload.title,
     body: payload.body,
     url: payload.url,
     tag: payload.tag,
     silent,
+    vibrate,
   });
 
   // 4. Send in parallel; track stale subs to clean up

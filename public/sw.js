@@ -17,7 +17,7 @@
  * fresh cache so users don't get pinned to old HTML forever.
  */
 
-const CACHE_VERSION = 'v2.22.5';     // bump on every deploy
+const CACHE_VERSION = 'v2.22.6';     // bump on every deploy
 const STATIC_CACHE = `pungctual-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `pungctual-runtime-${CACHE_VERSION}`;
 
@@ -161,7 +161,8 @@ const OFFLINE_HTML = `<!doctype html>
 //     body: "Tuesday Night League — Night 4",
 //     url: "/c/test-club/a/tuesday/events/<uuid>",
 //     tag: "signup-<eventId>",   // groups related notifications
-//     silent: false              // honors user's sound prefs server-side
+//     silent: false,             // honors user's sound prefs server-side
+//     vibrate: true              // honors user's vibration pref (audit #18)
 //   }
 //
 // 'notificationclick' opens (or focuses) the app at the URL.
@@ -200,6 +201,14 @@ self.addEventListener('push', (event) => {
     // want that — even reminders should auto-dismiss.
     requireInteraction: false,
   };
+
+  // Audit #18: honor the vibration preference. Only when not silent —
+  // Chrome rejects notifications that are silent AND specify a vibration
+  // pattern. vibrate: [] means explicitly no vibration; iOS ignores the
+  // vibrate option entirely (the settings hint already says "(mobile)").
+  if (payload.silent !== true) {
+    options.vibrate = payload.vibrate === false ? [] : [200, 100, 200];
+  }
 
   event.waitUntil(self.registration.showNotification(title, options));
 });

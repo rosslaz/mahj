@@ -245,6 +245,29 @@ Tailwind palette (matches the logo — pink clock-flowers + green):
 
 ## Current status / open items
 
+- **Release 2 of the low tier shipped 2026-07-04** (audit #18, #19, #20, #22 —
+  the notifications-correctness batch; sw.js touched, CACHE_VERSION restamps
+  automatically at build):
+  - **#18:** vibration pref now honored end-to-end — push-server ships
+    `vibrate` in the payload, sw.js sets `vibrate: [200,100,200]` or `[]`
+    accordingly, and only when not silent (Chrome rejects silent + vibration
+    pattern). iOS ignores `vibrate`; the settings hint already says "(mobile)".
+  - **#19:** sendTestPush uses the new `'test'` category which bypasses the
+    per-category gate in sendPushToUser (was signup_activity → false "no
+    devices" when that category was disabled). Sound/vibration prefs still
+    apply to tests deliberately.
+  - **#20 (clean fix):** UserMenu sign-out unsubscribes this browser's push
+    registration + deletes the row BEFORE the session dies (server unregister
+    needs auth); best-effort, never blocks sign-out. DangerZone's
+    post-account-deletion sign-out does the browser-side unsubscribe only
+    (rows died with the account). Old cross-user rows on shared devices go
+    stale and are reaped by the existing 404/410 cleanup.
+  - **#22:** runReminderSweep no longer counts dispatch-failed events as
+    reminded (the stamp-skip/retry behavior was already correct — the count
+    lied); a stamp failure AFTER successful sends is now surfaced in errors
+    ("will be re-notified next tick") instead of silently swallowed.
+    (#22's Privacy/Sentry half was already fixed in the #4 batch.)
+
 - **Release 1 of the low tier shipped 2026-07-04** (audit #13, #15 partial,
   #16, #21):
   - **#13:** `app/auth/signout/route.ts` DELETED entirely — zero references

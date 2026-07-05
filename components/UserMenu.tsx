@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth } from '@/lib/use-auth';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
+import { unsubscribeFromPush } from '@/lib/push-client';
+import { unregisterPushSubscription } from '@/app/actions/push';
 
 export default function UserMenu() {
   const auth = useAuth();
@@ -11,6 +13,19 @@ export default function UserMenu() {
 
   async function signOut() {
     const supabase = getBrowserSupabase();
+    // Audit #20 (shared-device crosstalk): kill this browser's push
+    // registration BEFORE the session dies — the server-side unregister
+    // needs auth. Without this, the next person signing in on a shared
+    // device (a couple sharing an iPad is not hypothetical for mahjong
+    // clubs) sits next to a live subscription still pointed at the
+    // previous user, and this device keeps receiving THEIR notifications.
+    // Best-effort: sign-out must never be blocked by push cleanup.
+    try {
+      const endpoint = await unsubscribeFromPush();
+      if (endpoint) await unregisterPushSubscription(endpoint);
+    } catch (e) {
+      console.warn('[signOut] push cleanup failed (continuing):', e);
+    }
     await supabase.auth.signOut();
     setOpen(false);
     window.location.href = '/';

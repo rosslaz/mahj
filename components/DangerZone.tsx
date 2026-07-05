@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
 import { deleteMyAccount } from '@/app/actions/delete-account';
+import { unsubscribeFromPush } from '@/lib/push-client';
 
 /**
  * "Danger zone" section on the profile page. Contains the delete-account flow.
@@ -35,6 +36,14 @@ export default function DangerZone() {
       }
       // Sign out client-side. The auth.users row is already gone server-side,
       // but the cookie is still here — clearing it cleanly.
+      //
+      // Audit #20: also kill this browser's push registration. The account's
+      // subscription ROWS died with the deletion, but the browser-side
+      // subscription would live on — the next person to sign in on this
+      // device would attach a fresh row to a recycled endpoint. Server-side
+      // unregister isn't possible here (the account is gone); the browser
+      // unsubscribe is the part that matters.
+      try { await unsubscribeFromPush(); } catch { /* best-effort */ }
       const supabase = getBrowserSupabase();
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       // Redirect to a farewell screen
